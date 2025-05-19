@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import axios from 'axios';
 dotenv.config();
 
-export const cloudServerUrl = 'http://localhost:8080/app';
+export const cloudServerUrl = process.env.SERVER_URL || 'http://localhost:8080';
 export const appName = 'OpenSign™';
 
 export const MAX_NAME_LENGTH = 250;
