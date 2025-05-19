@@ -15,12 +15,12 @@ on:
   push:
     branches:
       - main
-      - staging]
+      - staging
 
   pull_request:
     branches:
       - main
-      - staging]
+      - staging
   release:
     types: [published]
 
