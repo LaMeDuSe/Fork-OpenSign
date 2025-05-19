@@ -50,6 +50,7 @@ if (useLocal !== 'true') {
     });
   }
 } else {
+  console.log('Using local storage for files.');
   fsAdapter = new FSFilesAdapter({
     filesSubDirectory: 'files', // optional, defaults to ./files
   });
