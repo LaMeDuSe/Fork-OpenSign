@@ -169,6 +169,8 @@ export async function validateSignedLocalUrl(signedUrl) {
     const decoded = jwt.verify(token, secretKey);
     // Check if the file URL in the JWT matches the requested file URL
     const fileUrl = signedUrl.split('?')[0];
+    console.log("file: ", fileUrl)
+    console.log("decoded: ", decoded.fileUrl)
     if (decoded.fileUrl !== fileUrl) {
       throw new Error('Invalid file URL in token.');
     }
