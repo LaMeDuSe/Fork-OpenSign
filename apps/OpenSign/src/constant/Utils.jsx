@@ -1,6 +1,5 @@
 import axios from "axios";
 import moment from "moment";
-import React from "react";
 import { PDFDocument, rgb, degrees } from "pdf-lib";
 import Parse from "parse";
 import { appInfo } from "./appinfo";
@@ -21,7 +20,38 @@ export const isTabAndMobile = window.innerWidth < 1023;
 export const textInputWidget = "text input";
 export const textWidget = "text";
 export const radioButtonWidget = "radio button";
+export function getEnv() {
+  return window?.RUNTIME_ENV || {};
+}
 
+//function for create list of year for date widget
+export const range = (start, end, step) => {
+  const range = [];
+  for (let i = start; i <= end; i += step) {
+    range.push(i);
+  }
+  return range;
+};
+//function for get year
+export const getYear = (date) => {
+  const newYear = new Date(date).getFullYear();
+  return newYear;
+};
+export const years = range(1950, getYear(new Date()) + 16, 1);
+export const months = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December"
+];
 export const fileasbytes = async (filepath) => {
   const response = await fetch(filepath); // Adjust the path accordingly
   const arrayBuffer = await response.arrayBuffer();
@@ -304,56 +334,73 @@ export const changeDateToMomentFormat = (format) => {
   }
 };
 export const addWidgetOptions = (type, signer, widgetValue) => {
-  const defaultOpt = { name: type, status: "required" };
+  const status = { status: "required" };
   switch (type) {
     case "signature":
-      return defaultOpt;
+      return { ...status, name: "Signature" };
     case "stamp":
-      return defaultOpt;
+      return { ...status, name: "Upload stamp" };
     case "checkbox":
       return {
-        ...defaultOpt,
-        options: { isReadOnly: false, isHideLabel: false }
+        ...status,
+        name: "Checkbox",
+        isReadOnly: false,
+        isHideLabel: false
       };
     case textInputWidget:
-      return { ...defaultOpt, isReadOnly: false };
+      return { ...status, name: "Text", isReadOnly: false };
     case "initials":
-      return defaultOpt;
+      return { ...status, name: "Initials" };
     case "name":
-      return { ...defaultOpt, defaultValue: widgetValue ? widgetValue : "" };
+      return {
+        ...status,
+        name: "Name",
+        defaultValue: widgetValue ? widgetValue : ""
+      };
     case "company":
-      return { ...defaultOpt, defaultValue: widgetValue ? widgetValue : "" };
+      return {
+        ...status,
+        name: "Company",
+        defaultValue: widgetValue ? widgetValue : ""
+      };
     case "job title":
-      return { ...defaultOpt, defaultValue: widgetValue ? widgetValue : "" };
+      return {
+        ...status,
+        name: "Job title",
+        defaultValue: widgetValue ? widgetValue : ""
+      };
     case "date": {
       const dateFormat = signer?.DateFormat
         ? selectFormat(signer?.DateFormat)
         : "MM/dd/yyyy";
       return {
-        ...defaultOpt,
+        ...status,
+        name: "Date",
         response: getDate(signer?.DateFormat),
         validation: { format: dateFormat, type: "date-format" }
       };
     }
     case "image":
-      return defaultOpt;
+      return { ...status, name: "Upload image" };
     case "email":
       return {
-        ...defaultOpt,
+        ...status,
+        name: "Email",
         validation: { type: "email", pattern: "" },
         defaultValue: widgetValue ? widgetValue : ""
       };
     case "dropdown":
-      return defaultOpt;
+      return { ...status, name: "Dropdown" };
     case radioButtonWidget:
       return {
-        ...defaultOpt,
+        ...status,
+        name: "Radio button",
         values: [],
         isReadOnly: false,
         isHideLabel: false
       };
     case textWidget:
-      return defaultOpt;
+      return { ...status, name: "Text" };
     default:
       return {};
   }
@@ -362,30 +409,30 @@ export const addWidgetOptions = (type, signer, widgetValue) => {
 export const addWidgetSelfsignOptions = (type, getWidgetValue, owner) => {
   switch (type) {
     case "signature":
-      return { name: "signature" };
+      return { name: "Signature" };
     case "stamp":
-      return { name: "stamp" };
+      return { name: "Upload stamp" };
     case "checkbox":
-      return { name: "checkbox" };
+      return { name: "Checkbox" };
     case textWidget:
-      return { name: "text" };
+      return { name: "Text" };
     case "initials":
-      return { name: "initials" };
+      return { name: "Initials" };
     case "name":
       return {
-        name: "name",
+        name: "Name",
         defaultValue: getWidgetValue(type),
         validation: { type: "text", pattern: "" }
       };
     case "company":
       return {
-        name: "company",
+        name: "Company",
         defaultValue: getWidgetValue(type),
         validation: { type: "text", pattern: "" }
       };
     case "job title":
       return {
-        name: "job title",
+        name: "Job title",
         defaultValue: getWidgetValue(type),
         validation: { type: "text", pattern: "" }
       };
@@ -394,16 +441,16 @@ export const addWidgetSelfsignOptions = (type, getWidgetValue, owner) => {
         ? selectFormat(owner?.DateFormat)
         : "MM/dd/yyyy";
       return {
-        name: "date",
+        name: "Date",
         response: getDate(owner?.DateFormat),
         validation: { format: dateFormat, type: "date-format" }
       };
     }
     case "image":
-      return { name: "image" };
+      return { name: "Upload image" };
     case "email":
       return {
-        name: "email",
+        name: "Email",
         defaultValue: getWidgetValue(type),
         validation: { type: "email", pattern: "" }
       };
@@ -462,10 +509,6 @@ export const defaultWidthHeight = (type) => {
     default:
       return { width: 150, height: 60 };
   }
-};
-
-export const resizeBorderExtraWidth = () => {
-  return 20;
 };
 
 export async function getBase64FromUrl(url, autosign) {
@@ -640,10 +683,14 @@ export const signPdfFun = async (
 };
 
 export const randomId = () => {
-  const randomBytes = crypto.getRandomValues(new Uint16Array(1));
-  const randomValue = randomBytes[0];
-  const randomDigit = 1000 + (randomValue % 9000);
-  return randomDigit;
+  // 1. Grab a cryptographically-secure 32-bit random value
+  const randomBytes = crypto.getRandomValues(new Uint32Array(1));
+  const raw = randomBytes[0];          // 0 … 4 294 967 295
+
+  // 2. Collapse into a 90 000 000-wide band (0…89 999 999), then shift to 10 000 000…99 999 999
+  const eightDigit = 10_000_000 + (raw % 90_000_000);
+
+  return eightDigit;
 };
 
 export const createDocument = async (
@@ -815,8 +862,6 @@ export const onChangeInput = (
   userId,
   initial,
   dateFormat,
-  isDefaultEmpty,
-  isRadio,
   fontSize,
   fontColor
 ) => {
@@ -853,22 +898,13 @@ export const onChangeInput = (
                   }
                 }
               };
-            } else if (isDefaultEmpty) {
-              return {
-                ...position,
-                options: {
-                  ...position.options,
-                  response: value,
-                  defaultValue: isRadio ? "" : []
-                }
-              };
             } else {
               return {
                 ...position,
                 options: {
                   ...position.options,
                   response: value,
-                  defaultValue:""
+                  defaultValue: ""
                 }
               };
             }
@@ -915,7 +951,8 @@ export const onChangeInput = (
             ...positionData,
             options: {
               ...positionData.options,
-              response: value
+              response: value,
+              defaultValue: ""
             }
           };
         }
@@ -1078,7 +1115,7 @@ export const addInitialData = (signerPos, setXyPosition, value, userId) => {
 };
 
 //function for embed document id
-export const embedDocId = async (pdfDoc, documentId, allPages) => {
+export const embedDocId = async (pdfOriginalWH, pdfDoc, documentId) => {
   const appName =
     "OpenSign™";
   // `fontBytes` is used to embed custom font in pdf
@@ -1087,19 +1124,21 @@ export const embedDocId = async (pdfDoc, documentId, allPages) => {
   );
   pdfDoc.registerFontkit(fontkit);
   const font = await pdfDoc.embedFont(fontBytes, { subset: true });
-  for (let i = 0; i < allPages; i++) {
+  //pdfOriginalWH contained all pdf's pages width and height
+  for (let i = 0; i < pdfOriginalWH?.length; i++) {
     const fontSize = 10;
     const textContent =
           documentId && `${appName} DocumentId: ${documentId} `;
     const pages = pdfDoc.getPages();
     const page = pages[i];
+    const getSize = pdfOriginalWH[i];
     try {
       const getObj = compensateRotation(
         page.getRotation().angle,
         10,
         5,
         1,
-        page.getSize(),
+        getSize,
         fontSize,
         rgb(0.5, 0.5, 0.5),
         font,
@@ -1196,7 +1235,6 @@ export function onSaveSign(
     return updatedArray;
   } //condition when user edit signature/initial then updated signature apply all existing drawn signatures
   else if (isApplyAll) {
-    // console.log("signatureImg",signatureImg)
     const updatedArray = updateXYposition.map((page) => ({
       ...page,
       pos: page.pos.map(
@@ -1502,7 +1540,13 @@ const getWidgetsFontColor = (type) => {
   }
 };
 //function for embed multiple signature using pdf-lib
-export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
+export const multiSignEmbed = async (
+  pdfOriginalWH,
+  widgets,
+  pdfDoc,
+  signyourself,
+  scale
+) => {
   // `fontBytes` is used to embed custom font in pdf
   const fontBytes = await fileasbytes(
     "https://cdn.opensignlabs.com/webfonts/times.ttf"
@@ -1511,6 +1555,11 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
   const font = await pdfDoc.embedFont(fontBytes, { subset: true });
   let hasError = false;
   for (let item of widgets) {
+    //pdfOriginalWH contained all pdf's pages width and height
+    //'getSize' is used to get particular pdf's page width and height
+    const getSize = pdfOriginalWH.find(
+      (page) => page?.pageNumber === item?.pageNumber
+    );
     if (hasError) break; // Stop the outer loop if an error occurred
     const typeExist = item.pos.some((data) => data?.type);
     let updateItem;
@@ -1630,10 +1679,11 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
         ].includes(position.type);
         if (position.type === "checkbox") {
           let checkboxGapFromTop, isCheck;
-          let y = yPos(position);
-          const optionsFontSize = fontSize || 13;
-          const checkboxSize = fontSize;
-          const checkboxTextGapFromLeft = fontSize + 5 || 22;
+          let y = yPos(position) + 2;
+          //calculate checkbox size to draw on pdf
+          const checkboxSize = fontSize - 1;
+          //calculate gap between checkbox and options
+          const checkboxTextGapFromLeft = fontSize + 5;
           if (position?.options?.values.length > 0) {
             position?.options?.values.forEach((item, ind) => {
               const checkboxRandomId = "checkbox" + randomId();
@@ -1645,13 +1695,11 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
               } else if (position?.options?.defaultValue) {
                 isCheck = position?.options?.defaultValue?.includes(ind);
               }
-
               const checkbox = form.createCheckBox(checkboxRandomId);
-
               if (ind > 0) {
                 y = y + checkboxGapFromTop;
               } else {
-                checkboxGapFromTop = fontSize + 5 || 26;
+                checkboxGapFromTop = fontSize + 3.2;
               }
 
               if (!position?.options?.isHideLabel) {
@@ -1659,10 +1707,10 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
                 const optionsPosition = compensateRotation(
                   page.getRotation().angle,
                   xPos(position) + checkboxTextGapFromLeft,
-                  y,
+                  y - 3,
                   1,
-                  page.getSize(),
-                  optionsFontSize,
+                  getSize,
+                  fontSize,
                   updateColorInRgb,
                   font,
                   page
@@ -1675,7 +1723,7 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
                 width: checkboxSize,
                 height: checkboxSize
               };
-              checkboxObj = getWidgetPosition(page, checkboxObj, 1);
+              checkboxObj = getWidgetPosition(page, checkboxObj, 1, getSize);
               checkbox.addToPage(page, checkboxObj);
 
               //applied which checkbox should be checked
@@ -1745,7 +1793,7 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
             : NewbreakTextIntoLines(textContent, fixedWidth);
           // Set initial y-coordinate for the first line
           let x = xPos(position);
-          let y = yPos(position);
+          let y = yPos(position) - 4;
           // Embed each line on the page
           for (const line of lines) {
             const textPosition = compensateRotation(
@@ -1753,7 +1801,7 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
               x,
               y,
               1,
-              page.getSize(),
+              getSize,
               fontSize,
               updateColorInRgb,
               font,
@@ -1787,7 +1835,12 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
             width: widgetWidth,
             height: widgetHeight
           };
-          const dropdownOption = getWidgetPosition(page, dropdownObj, 1);
+          const dropdownOption = getWidgetPosition(
+            page,
+            dropdownObj,
+            1,
+            getSize
+          );
           const dropdownSelected = { ...dropdownOption, font: font };
           dropdown.defaultUpdateAppearances(font);
           dropdown.addToPage(page, dropdownSelected);
@@ -1795,28 +1848,33 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
         } else if (position.type === radioButtonWidget) {
           const radioRandomId = "radio" + randomId();
           const radioGroup = form.createRadioGroup(radioRandomId);
-          let radioOptionGapFromTop;
-          const optionsFontSize = fontSize || 13;
-          const radioTextGapFromLeft = fontSize + 5 || 20;
+          //draw radio button on document and options if hide label is enable
+          let radioButtonFromTop;
+          //getting radio buttons options text font size
+          const optionsFontSize = fontSize;
+          //calculate value of gap between radio button and options
+          const radioTextGapFromLeft = fontSize + 6;
+          //getting radio button font size
           const radioSize = fontSize;
+          //getting position of radio widget in y direction
           let y = yPos(position);
+          //on the basic of option's length create radio button and message
           if (position?.options?.values.length > 0) {
             position?.options?.values.forEach((item, ind) => {
               if (ind > 0) {
-                y = y + radioOptionGapFromTop;
+                y = y + radioButtonFromTop;
               } else {
-                radioOptionGapFromTop = fontSize + 10 || 25;
+                radioButtonFromTop = fontSize + 6;
               }
               if (!position?.options?.isHideLabel) {
                 // below line of code is used to embed label with radio button in pdf
-
                 const optionsPosition = compensateRotation(
                   page.getRotation().angle,
                   xPos(position) + radioTextGapFromLeft,
-                  y,
+                  y - 2,
                   1,
-                  page.getSize(),
-                  optionsFontSize,
+                  getSize,
+                  fontSize,
                   updateColorInRgb,
                   font,
                   page
@@ -1825,13 +1883,13 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
                 page.drawText(item, optionsPosition);
               }
               let radioObj = {
-                x: xPos(position),
+                x: xPos(position) + 2,
                 y: y,
                 width: radioSize,
                 height: radioSize
               };
 
-              radioObj = getWidgetPosition(page, radioObj, 1);
+              radioObj = getWidgetPosition(page, radioObj, 1, getSize);
               radioGroup.addOptionToPage(item, page, radioObj);
             });
           }
@@ -1849,7 +1907,7 @@ export const multiSignEmbed = async (widgets, pdfDoc, signyourself, scale) => {
             height: widgetHeight
           };
 
-          const imageOptions = getWidgetPosition(page, signature, 1);
+          const imageOptions = getWidgetPosition(page, signature, 1, getSize);
           page.drawImage(img, imageOptions);
         }
       } catch (err) {
@@ -2040,24 +2098,10 @@ export const addDefaultSignatureImg = (xyPosition, defaultSignImg, type) => {
   return xyDefaultPos;
 };
 
-//function for create list of year for date widget
-export const range = (start, end, step) => {
-  const range = [];
-  for (let i = start; i <= end; i += step) {
-    range.push(i);
-  }
-  return range;
-};
 //function for get month
 export const getMonth = (date) => {
   const newMonth = new Date(date).getMonth();
   return newMonth;
-};
-
-//function for get year
-export const getYear = (date) => {
-  const newYear = new Date(date).getFullYear();
-  return newYear;
 };
 
 //function to create/copy widget next to already dropped widget
@@ -2590,7 +2634,7 @@ function compensateRotation(
 }
 
 // `getWidgetPosition` is used to calulcate position of image type widget like x, y, width, height for pdf-lib
-function getWidgetPosition(page, image, sizeRatio) {
+function getWidgetPosition(page, image, sizeRatio, getSize) {
   let pageWidth;
   // pageHeight;
   if ([90, 270].includes(page.getRotation().angle)) {
@@ -2614,7 +2658,7 @@ function getWidgetPosition(page, image, sizeRatio) {
     imageX,
     imageYFromTop,
     1,
-    page.getSize(),
+    getSize,
     imageHeight
   );
 
@@ -3045,7 +3089,7 @@ export const mailTemplate = (param) => {
     "</td></tr><tr><td style='font-weight:bold;font-family:sans-serif;font-size:15px'>Note</td><td></td><td style='color:#626363;font-weight:bold'>" +
     param.note +
     "</td></tr><tr><td></td><td></td></tr></table></div> <div style='margin-left:70px'><a target=_blank href=" +
-    param.sigingUrl +
+    param.signingUrl +
     "><button style='padding:12px;background-color:#d46b0f;color:white;border:0px;font-weight:bold;margin-top:30px'>Sign here</button></a></div><div style='display:flex;justify-content:center;margin-top:10px'></div></div></div><div><p> This is an automated email from " +
     appName +
     ". For any queries regarding this email, please contact the sender " +
@@ -3116,4 +3160,70 @@ export const updateDateWidgetsRes = (documentData, signerId, journey) => {
       return item;
     }
   });
+};
+
+//function for show checked checkbox
+export const selectCheckbox = (ind, selectedCheckbox) => {
+  if (selectedCheckbox && selectedCheckbox?.length > 0) {
+    const isCheck = selectedCheckbox?.some((data) => data === ind);
+    return isCheck || false;
+  }
+};
+export const checkRegularExpress = (validateType, setValidatePlaceholder) => {
+  switch (validateType) {
+    case "email":
+      setValidatePlaceholder("demo@gmail.com");
+      break;
+    case "number":
+      setValidatePlaceholder("12345");
+      break;
+    case "text":
+      setValidatePlaceholder("please enter text");
+      break;
+    default:
+      setValidatePlaceholder("please enter value");
+  }
+};
+//function to use unlink signer from widgets
+export const handleUnlinkSigner = (
+  signerPos,
+  setSignerPos,
+  signersdata,
+  setSignersData,
+  uniqueId
+) => {
+  //remove existing signer's details from 'signerPos' array
+  const updatePlaceHolder = signerPos.map((x) => {
+    if (x.Id === uniqueId) {
+      return { ...x, signerPtr: {}, signerObjId: "" };
+    }
+    return { ...x };
+  });
+  setSignerPos(updatePlaceHolder);
+  //remove existing signer's details from 'signersdata' array and keep role and id
+  const updateSigner = signersdata.map((item) => {
+    if (item.Id == uniqueId) {
+      return { Role: item.Role, Id: item.Id, blockColor: item.blockColor };
+    }
+    return item;
+  });
+  setSignersData(updateSigner);
+};
+//function is used to get pdf original width and height
+export const getOriginalWH = async (pdf) => {
+  let pdfWHObj = [];
+  //get total page number
+  const totalPages = pdf?.numPages;
+  //according to page number get all pdf's pages width and height
+  for (let index = 0; index < totalPages; index++) {
+    try {
+      const getPage = await pdf.getPage(index + 1);
+      const width = getPage?.view[2];
+      const height = getPage?.view[3];
+      pdfWHObj.push({ pageNumber: index + 1, width, height });
+    } catch (e) {
+      console.log(`Error getting page ${index + 1} of PDF: ${e.message}`);
+    }
+  }
+  return pdfWHObj;
 };

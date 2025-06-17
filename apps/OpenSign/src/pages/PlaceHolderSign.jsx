@@ -11,11 +11,11 @@ import { HTML5Backend } from "react-dnd-html5-backend";
 import { useDrop } from "react-dnd";
 import RenderAllPdfPage from "../components/pdf/RenderAllPdfPage";
 import WidgetComponent from "../components/pdf/WidgetComponent";
-import Tour from "reactour";
+import Tour from "../primitives/Tour";
 import { useLocation, useParams } from "react-router";
 import SignerListPlace from "../components/pdf/SignerListPlace";
 import Header from "../components/pdf/PdfHeader";
-import { RWebShare } from "react-web-share";
+import ShareButton from "../primitives/ShareButton";
 import {
   replaceMailVaribles,
   pdfNewWidthFun,
@@ -44,7 +44,8 @@ import {
   handleSignatureType,
   getBase64FromUrl,
   generatePdfName,
-  mailTemplate
+  mailTemplate,
+  getOriginalWH
 } from "../constant/Utils";
 import RenderPdf from "../components/pdf/RenderPdf";
 import { useNavigate } from "react-router";
@@ -68,10 +69,12 @@ import LottieWithLoader from "../primitives/DotLottieReact";
 import Alert from "../primitives/Alert";
 import AsyncSelect from "react-select/async";
 import AddContact from "../primitives/AddContact";
+import WidgetsValueModal from "../components/pdf/WidgetsValueModal.jsx";
 
 function PlaceHolderSign() {
   const { t } = useTranslation();
   const copyUrlRef = useRef(null);
+  const isShowModal = useSelector((state) => state.widget.isShowModal);
   const appName =
     "OpenSign™";
   const editorRef = useRef();
@@ -121,7 +124,8 @@ function PlaceHolderSign() {
   const [selectedEmail, setSelectedEmail] = useState(false);
   const [isResize, setIsResize] = useState(false);
   const [zIndex, setZIndex] = useState(1);
-  const [signKey, setSignKey] = useState();
+  // tempSignerId is used to temporarily store the currently selected signer's unique ID, When editing a text widget, it automatically attaches a prefill user, and since prefill users are not shown in the signer list, the selected signer from before editing would be lost. To handle this, we store the currently selected signer's unique ID in tempSignerId before entering the text widget edit mode. Once the text widget settings are completed,
+  // we restore the original selected signer by setting tempSignerId back to uniqueId.This ensures that the correct signer remains selected and visible in the UI even after interacting with a prefill-only widget like the text widget.
   const [tempSignerId, setTempSignerId] = useState("");
   const [blockColor, setBlockColor] = useState("");
   const [isTextSetting, setIsTextSetting] = useState(false);
@@ -134,14 +138,11 @@ function PlaceHolderSign() {
   const [isDontShow, setIsDontShow] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const [widgetType, setWidgetType] = useState("");
   const [isUiLoading, setIsUiLoading] = useState(false);
   const [isRadio, setIsRadio] = useState(false);
   const [currWidgetsDetails, setCurrWidgetsDetails] = useState({});
-  const [selectWidgetId, setSelectWidgetId] = useState("");
   const [isCheckbox, setIsCheckbox] = useState(false);
   const [isNameModal, setIsNameModal] = useState(false);
-  const [widgetName, setWidgetName] = useState(false);
   const [mailStatus, setMailStatus] = useState("");
   const [isCurrUser, setIsCurrUser] = useState(false);
   const [pdfArrayBuffer, setPdfArrayBuffer] = useState("");
@@ -192,7 +193,7 @@ function PlaceHolderSign() {
     );
     if (user) {
       try {
-        const defaultRequestBody = `<p>Hi {{receiver_name}},</p><br><p>We hope this email finds you well. {{sender_name}}&nbsp;has requested you to review and sign&nbsp;{{document_title}}.</p><p>Your signature is crucial to proceed with the next steps as it signifies your agreement and authorization.</p><br><p>{{signing_url}}</p><br><p>If you have any questions or need further clarification regarding the document or the signing process,  please contact the sender.</p><br><p>Thanks</p><p> Team ${appName}</p><br>`;
+        const defaultRequestBody = `<p>Hi {{receiver_name}},</p><br><p>We hope this email finds you well. {{sender_name}}&nbsp;has requested you to review and sign&nbsp;{{document_title}}.</p><p>Your signature is crucial to proceed with the next steps as it signifies your agreement and authorization.</p><br><p><a href='{{signing_url}}' rel='noopener noreferrer' target='_blank'>Sign here</a></p><br><br><p>If you have any questions or need further clarification regarding the document or the signing process,  please contact the sender.</p><br><p>Thanks</p><p> Team ${appName}</p><br>`;
         const defaultSubject = `{{sender_name}} has requested you to sign {{document_title}}`;
         setDefaultBody(defaultRequestBody);
         setDefaultSubject(defaultSubject);
@@ -513,7 +514,8 @@ function PlaceHolderSign() {
         pageNumber,
         containerWH
       );
-      let dropData = [];
+      let dropData = [],
+        dropObj;
       let placeHolder;
       const dragTypeValue = item?.text ? item.text : monitor.type;
       const widgetWidth =
@@ -522,11 +524,15 @@ function PlaceHolderSign() {
         defaultWidthHeight(dragTypeValue).height * containerScale;
       //adding and updating drop position in array when user drop signature button in div
       if (item === "onclick") {
+        // `getBoundingClientRect()` is used to get accurate measurement width, height of the Pdf div
+        const divWidth = divRef.current.getBoundingClientRect().width;
         const divHeight = divRef.current.getBoundingClientRect().height;
-        // `getBoundingClientRect()` is used to get accurate measurement height of the div
-        const dropObj = {
+        //  Compute the pixel‐space center within the PDF viewport:
+        const centerX_Pixels = divWidth / 2 - widgetWidth / 2;
+        const xPosition_Final = centerX_Pixels / (containerScale * scale);
+        dropObj = {
           //onclick put placeholder center on pdf
-          xPosition: widgetWidth / 4 + containerWH.width / 2,
+          xPosition: xPosition_Final,
           yPosition: widgetHeight + divHeight / 2,
           isStamp:
             (dragTypeValue === "stamp" || dragTypeValue === "image") && true,
@@ -556,7 +562,7 @@ function PlaceHolderSign() {
         const getYPosition = signBtnPosition[0]
           ? y - signBtnPosition[0].yPos
           : y;
-        const dropObj = {
+        dropObj = {
           xPosition: getXPosition / (containerScale * scale),
           yPosition: getYPosition / (containerScale * scale),
           isStamp:
@@ -572,7 +578,6 @@ function PlaceHolderSign() {
         dropData.push(dropObj);
         placeHolder = { pageNumber: pageNumber, pos: dropData };
       }
-      setSelectWidgetId(key);
       if (signer) {
         let filterSignerPos, currentPagePosition;
         if (dragTypeValue === textWidget) {
@@ -664,24 +669,14 @@ function PlaceHolderSign() {
         } else if (dragTypeValue === radioButtonWidget) {
           setIsRadio(true);
         }
-        setWidgetType(dragTypeValue);
-        setSignKey(key);
-        setCurrWidgetsDetails({});
-        setWidgetName(dragTypeValue);
+        setCurrWidgetsDetails(dropObj);
       }
     }
   };
 
   //function for get pdf page details
   const pageDetails = async (pdf) => {
-    let pdfWHObj = [];
-    const totalPages = pdf?.numPages;
-    for (let index = 0; index < totalPages; index++) {
-      const getPage = await pdf.getPage(index + 1);
-      const scale = 1;
-      const { width, height } = getPage.getViewport({ scale });
-      pdfWHObj.push({ pageNumber: index + 1, width, height });
-    }
+    const pdfWHObj = await getOriginalWH(pdf);
     setPdfOriginalWH(pdfWHObj);
     setPdfLoad(true);
   };
@@ -865,7 +860,9 @@ function PlaceHolderSign() {
       });
       const isSignYourSelfFlow = false;
       try {
+        //pdfOriginalWH contained all pdf's pages width,height & pagenumber in array format
         const pdfBase64 = await multiSignEmbed(
+          pdfOriginalWH,
           placeholder,
           pdfDoc,
           isSignYourSelfFlow,
@@ -966,7 +963,7 @@ function PlaceHolderSign() {
       const IsSignerNotExist = filterPrefill?.filter((x) => !x.signerObjId);
       if (IsSignerNotExist && IsSignerNotExist?.length > 0) {
         setSignerExistModal(true);
-        setSelectWidgetId(IsSignerNotExist[0]?.placeHolder?.[0]?.pos?.[0]?.key);
+        setCurrWidgetsDetails(IsSignerNotExist[0]?.placeHolder?.[0]?.pos);
       } else {
         saveDocumentDetails();
       }
@@ -1144,9 +1141,13 @@ function PlaceHolderSign() {
               <i className="fa-light fa-copy" />
               <span className=" hidden md:block ml-1 ">{t("copy-link")}</span>
             </button>
-            <RWebShare data={{ url: data.url, title: t("sign-url") }}>
+            <ShareButton
+              title={t("sign-url")}
+              text={t("sign-url")}
+              url={data.url}
+            >
               <i className="fa-light fa-share-from-square op-link op-link-secondary no-underline"></i>
-            </RWebShare>
+            </ShareButton>
           </div>
         </div>
       );
@@ -1219,7 +1220,7 @@ function PlaceHolderSign() {
             receiver_phone: signerMail[i]?.Phone || "",
             expiry_date: localExpireDate,
             company_name: orgName,
-            signing_url: `<a href=${signPdf} target=_blank>Sign here</a>`
+            signing_url: signPdf
           };
           replaceVar = replaceMailVaribles(
             requestSubject,
@@ -1248,7 +1249,7 @@ function PlaceHolderSign() {
             receiver_phone: signerMail[i]?.Phone || "",
             expiry_date: localExpireDate,
             company_name: orgName,
-            signing_url: `<a href=${signPdf} target=_blank>Sign here</a>`
+            signing_url: signPdf
           };
           replaceVar = replaceMailVaribles(mailSubject, htmlReqBody, variables);
         }
@@ -1259,7 +1260,7 @@ function PlaceHolderSign() {
           title: documentName,
           organization: orgName,
           localExpireDate: localExpireDate,
-          sigingUrl: signPdf
+          signingUrl: signPdf
         };
         let params = {
           extUserId: owner?.objectId,
@@ -1428,21 +1429,21 @@ function PlaceHolderSign() {
         const getXYdata = getPageNumer[0].pos;
         const getPosData = getXYdata;
         const addSignPos = getPosData.map((position) => {
-          if (position.key === signKey) {
-            if (widgetType === radioButtonWidget) {
+          if (position.key === currWidgetsDetails?.key) {
+            if (currWidgetsDetails?.type === radioButtonWidget) {
               if (addOption) {
                 return {
                   ...position,
                   Height: position.Height
                     ? position.Height + 15
-                    : defaultWidthHeight(widgetType).height + 15
+                    : defaultWidthHeight(currWidgetsDetails?.type).height + 15
                 };
               } else if (deleteOption) {
                 return {
                   ...position,
                   Height: position.Height
                     ? position.Height - 15
-                    : defaultWidthHeight(widgetType).height - 15
+                    : defaultWidthHeight(currWidgetsDetails?.type).height - 15
                 };
               } else {
                 return {
@@ -1451,6 +1452,7 @@ function PlaceHolderSign() {
                     ...position.options,
                     name: dropdownName,
                     values: dropdownOptions,
+                    status: status,
                     isReadOnly: isReadOnly || false,
                     isHideLabel: isHideLabel || false,
                     defaultValue: defaultValue,
@@ -1463,20 +1465,20 @@ function PlaceHolderSign() {
                   }
                 };
               }
-            } else if (widgetType === "checkbox") {
+            } else if (currWidgetsDetails?.type === "checkbox") {
               if (addOption) {
                 return {
                   ...position,
                   Height: position.Height
                     ? position.Height + 15
-                    : defaultWidthHeight(widgetType).height + 15
+                    : defaultWidthHeight(currWidgetsDetails?.type).height + 15
                 };
               } else if (deleteOption) {
                 return {
                   ...position,
                   Height: position.Height
                     ? position.Height - 15
-                    : defaultWidthHeight(widgetType).height - 15
+                    : defaultWidthHeight(currWidgetsDetails?.type).height - 15
                 };
               } else {
                 return {
@@ -1567,7 +1569,7 @@ function PlaceHolderSign() {
         const getXYdata = getPageNumer[0].pos;
         const getPosData = getXYdata;
         const addSignPos = getPosData.map((position) => {
-          if (position.key === signKey) {
+          if (position.key === currWidgetsDetails?.key) {
             if (position.type === textInputWidget) {
               return {
                 ...position,
@@ -2367,9 +2369,9 @@ function PlaceHolderSign() {
                     setXyPosition={setSignerPos}
                     allPages={allPages}
                     pageNumber={pageNumber}
-                    signKey={signKey}
+                    signKey={currWidgetsDetails?.key}
                     Id={uniqueId}
-                    widgetType={widgetType}
+                    widgetType={currWidgetsDetails?.type}
                     setUniqueId={setUniqueId}
                     tempSignerId={tempSignerId}
                     setTempSignerId={setTempSignerId}
@@ -2474,17 +2476,13 @@ function PlaceHolderSign() {
                         setZIndex={setZIndex}
                         setIsPageCopy={setIsPageCopy}
                         signersdata={signersdata}
-                        setSignKey={setSignKey}
                         handleLinkUser={handleLinkUser}
                         setUniqueId={setUniqueId}
                         isDragging={isDragging}
                         setShowDropdown={setShowDropdown}
-                        setWidgetType={setWidgetType}
                         setIsRadio={setIsRadio}
                         setIsCheckbox={setIsCheckbox}
                         setCurrWidgetsDetails={setCurrWidgetsDetails}
-                        setSelectWidgetId={setSelectWidgetId}
-                        selectWidgetId={selectWidgetId}
                         handleNameModal={setIsNameModal}
                         setTempSignerId={setTempSignerId}
                         uniqueId={uniqueId}
@@ -2499,6 +2497,7 @@ function PlaceHolderSign() {
                         setFontColor={setFontColor}
                         unSignedWidgetId={unSignedWidgetId}
                         divRef={divRef}
+                        currWidgetsDetails={currWidgetsDetails}
                       />
                     )}
                   </div>
@@ -2536,7 +2535,6 @@ function PlaceHolderSign() {
                         handleDeleteUser={handleDeleteUser}
                         uniqueId={uniqueId}
                         setSignerPos={setSignerPos}
-                        setSelectWidgetId={setSelectWidgetId}
                       />
                     </div>
                   ) : (
@@ -2582,6 +2580,23 @@ function PlaceHolderSign() {
             </div>
           </div>
         )}
+        {isShowModal[currWidgetsDetails?.key] && (
+          <WidgetsValueModal
+            key={currWidgetsDetails?.key}
+            xyPosition={signerPos}
+            pageNumber={pageNumber}
+            setXyPosition={setSignerPos}
+            uniqueId={uniqueId}
+            setPageNumber={setPageNumber}
+            setCurrWidgetsDetails={setCurrWidgetsDetails}
+            currWidgetsDetails={currWidgetsDetails}
+            index={pageNumber}
+            isSave={true}
+            tempSignerId={tempSignerId}
+            setUniqueId={setUniqueId}
+            signatureTypes={signatureType}
+          />
+        )}
         <ModalUi
           isOpen={isAlreadyPlace.status}
           title={t("document-alert")}
@@ -2610,7 +2625,7 @@ function PlaceHolderSign() {
         )}
         <WidgetNameModal
           signatureType={signatureType}
-          widgetName={widgetName}
+          widgetName={currWidgetsDetails?.options?.name}
           defaultdata={currWidgetsDetails}
           isOpen={isNameModal}
           handleClose={handleNameModal}

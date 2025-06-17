@@ -10,8 +10,8 @@ import {
 } from "../constant/const";
 import Alert from "./Alert";
 import Tooltip from "./Tooltip";
-import { RWebShare } from "react-web-share";
-import Tour from "reactour";
+import ShareButton from "./ShareButton";
+import Tour from "../primitives/Tour";
 import Parse from "parse";
 import {
   copytoData,
@@ -398,7 +398,7 @@ const ReportTable = (props) => {
       setIsResendMail({ [item.objectId]: true });
     } else if (act.action === "bulksend") {
       handleBulkSend(item);
-    } else if (act.action === "sharewith") {
+    } else if (act.action === "sharewithteam") {
       if (item?.SharedWith && item?.SharedWith.length > 0) {
         // below code is used to get existing sharewith teams and formated them as per react-select
         const formatedList = item?.SharedWith.map((x) => ({
@@ -679,7 +679,7 @@ const ReportTable = (props) => {
       receiver_phone: userDetails?.Phone || "",
       expiry_date: localExpireDate,
       company_name: doc.ExtUserPtr.Company,
-      signing_url: `<a href=${signPdf} target=_blank>Sign here</a>`
+      signing_url: signPdf
     };
     const res = replaceMailVaribles(subject, "", variables);
     setMail((prev) => ({ ...prev, subject: res.subject }));
@@ -710,7 +710,7 @@ const ReportTable = (props) => {
       receiver_phone: userDetails?.Phone || "",
       expiry_date: localExpireDate,
       company_name: doc.ExtUserPtr.Company,
-      signing_url: `<a href=${signPdf} target=_blank>Sign here</a>`
+      signing_url: signPdf
     };
     const res = replaceMailVaribles("", body, variables);
 
@@ -754,7 +754,7 @@ const ReportTable = (props) => {
       receiver_phone: user?.signerPtr?.Phone || "",
       expiry_date: localExpireDate,
       company_name: doc?.ExtUserPtr?.Company || "",
-      signing_url: `<a href=${signPdf} target=_blank>Sign here</a>`
+      signing_url: signPdf
     };
     const subject =
       doc?.RequestSubject ||
@@ -763,7 +763,7 @@ const ReportTable = (props) => {
     const body =
       doc?.RequestBody ||
       doc?.ExtUserPtr?.TenantId?.RequestBody ||
-      `<html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8' /></head><body><p>Hi {{receiver_name}},</p><br><p>We hope this email finds you well. {{sender_name}} has requested you to review and sign <b>"{{document_title}}"</b>.</p><p>Your signature is crucial to proceed with the next steps as it signifies your agreement and authorization.</p><br><p>{{signing_url}}</p><br><p>If you have any questions or need further clarification regarding the document or the signing process,  please contact the sender.</p><br><p>Thanks</p><p> Team ${appName}</p><br></body> </html>`;
+      `<html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8' /></head><body><p>Hi {{receiver_name}},</p><br><p>We hope this email finds you well. {{sender_name}} has requested you to review and sign <b>"{{document_title}}"</b>.</p><p>Your signature is crucial to proceed with the next steps as it signifies your agreement and authorization.</p><br><p><a href='{{signing_url}}' rel='noopener noreferrer' target='_blank'>Sign here</a></p><br><br><p>If you have any questions or need further clarification regarding the document or the signing process,  please contact the sender.</p><br><p>Thanks</p><p> Team ${appName}</p><br></body> </html>`;
     const res = replaceMailVaribles(subject, body, variables);
     setMail((prev) => ({ ...prev, subject: res.subject, body: res.body }));
     setIsNextStep({ [user.Id]: true });
@@ -1411,7 +1411,7 @@ const ReportTable = (props) => {
               onRequestClose={closeTour}
               steps={props.tourData}
               isOpen={isTour}
-              // rounded={5}
+              rounded={5}
               closeWithMask={false}
             />
           </>
@@ -2183,17 +2183,15 @@ const ReportTable = (props) => {
                                       {share.email}
                                     </span>
                                     <div className="flex items-center gap-2">
-                                      <RWebShare
-                                        data={{
-                                          url: share.url,
-                                          title: "Sign url"
-                                        }}
+                                      <ShareButton
+                                        title={t("sign-url")}
+                                        text={t("sign-url")}
+                                        url={share.url}
+                                        className="op-btn op-btn-primary op-btn-outline op-btn-xs md:op-btn-sm "
                                       >
-                                        <button className="op-btn op-btn-primary op-btn-outline op-btn-xs md:op-btn-sm ">
-                                          <i className="fa-light fa-share-from-square"></i>{" "}
-                                          {t("btnLabel.Share")}
-                                        </button>
-                                      </RWebShare>
+                                        <i className="fa-light fa-share-from-square"></i>
+                                        {t("btnLabel.Share")}
+                                      </ShareButton>
                                       <button
                                         className="op-btn op-btn-primary op-btn-outline op-btn-xs md:op-btn-sm"
                                         onClick={() => copytoclipboard(share)}

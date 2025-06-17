@@ -25,17 +25,28 @@ const WidgetNameModal = (props) => {
   const statusArr = ["Required", "Optional"];
   const [signatureType, setSignatureType] = useState([]);
 
+  const handleHint = () => {
+    const type = props.defaultdata?.type;
+
+    if (type === "signature") {
+      return "Draw signature";
+    } else if (type === "stamp" || type === "image") {
+      return `Upload ${type}`;
+    } else if (type === "initials") {
+      return "Draw initial";
+    } else if (type === textInputWidget) {
+      return "Enter text";
+    } else {
+      return `Enter ${type}`;
+    }
+  };
   useEffect(() => {
     if (props.defaultdata) {
       setFormdata({
         name: props.defaultdata?.options?.name || "",
         defaultValue: props.defaultdata?.options?.defaultValue || "",
         status: props.defaultdata?.options?.status || "required",
-        hint:
-          props.defaultdata?.options?.hint ||
-          (props.defaultdata?.type === textInputWidget
-            ? "Enter text"
-            : `Enter ${props.defaultdata?.options?.name}`),
+        hint: props.defaultdata?.options?.hint || handleHint(),
         textvalidate:
           props.defaultdata?.options?.validation?.type === "regex"
             ? props.defaultdata?.options?.validation?.pattern
@@ -72,6 +83,19 @@ const WidgetNameModal = (props) => {
           props.handleData(data, props.defaultdata?.type);
         }
       } else {
+        const isTextInput = props.defaultdata?.type === textInputWidget;
+        const { isReadOnly, defaultValue, status } = formdata;
+        // If it’s a text‐input widget, enforce that read-only fields have
+        // either a defaultValue or an "optional" status.
+        if (isTextInput) {
+          const readOnlyWithoutValue =
+            isReadOnly && !defaultValue && status !== "optional";
+
+          if (readOnlyWithoutValue) {
+            alert(t("readonly-textinput-error"));
+            return;
+          }
+        }
         props.handleData(formdata);
       }
       setFormdata({
