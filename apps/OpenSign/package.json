@@ -9,7 +9,7 @@
     "@pdf-lib/fontkit": "^1.1.1",
     "@radix-ui/themes": "^3.2.1",
     "@reduxjs/toolkit": "^2.8.2",
-    "axios": "^1.9.0",
+    "axios": "^1.12.0",
     "date-fns-tz": "^3.2.0",
     "file-saver": "^2.0.5",
     "i18next": "^23.16.8",
