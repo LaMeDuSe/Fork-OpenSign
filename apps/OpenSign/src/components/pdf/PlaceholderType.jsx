@@ -1,39 +1,59 @@
-import React, { useEffect, useState, forwardRef, useRef } from "react";
 import {
-  getMonth,
-  getYear,
+  useEffect,
+  useState,
+  forwardRef,
+  useRef
+} from "react";
+import {
+  onChangeInput,
   radioButtonWidget,
   textInputWidget,
+  cellsWidget,
   textWidget,
-  months,
-  years,
   selectCheckbox,
-  checkRegularExpress
+  isBase64,
+  drawWidget,
+  changeDateToMomentFormat
 } from "../../constant/Utils";
-import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "../../styles/signature.css";
 import { useTranslation } from "react-i18next";
+import CellsWidget from "./CellsWidget";
+import { useSelector } from "react-redux";
+import Loader from "../../primitives/Loader";
+import moment from "moment";
+
 const textWidgetCls =
-  "w-full h-full md:min-w-full md:min-h-full z-[999] text-[12px] rounded-[2px] border-[1px] border-[#007bff] overflow-hidden resize-none outline-none text-base-content item-center whitespace-pre-wrap bg-white";
-const selectWidgetCls =
-  "w-full h-full absolute left-0 top-0 border-[1px] border-[#007bff] rounded-[2px] focus:outline-none text-base-content";
+  "w-full h-full md:min-w-full md:min-h-full z-[999] text-[12px] overflow-hidden resize-none outline-none text-base-content item-center whitespace-pre-wrap";
 const widgetCls =
   "select-none-cls overflow-hidden w-full h-full text-black flex flex-col justify-center items-center";
 function PlaceholderType(props) {
+  const selectWidgetCls = `w-full h-full absolute left-0 top-0 focus:outline-none text-base-content`;
   const { t } = useTranslation();
+  const textRef = useRef();
+  const prefillImg = useSelector((state) => state.widget.prefillImg);
+  const prefillImgLoad = useSelector((state) => state.widget.prefillImgLoad);
+  const defaultData = props?.pos?.options?.defaultValue;
+  const response = props?.pos?.options?.response;
   const type = props?.pos?.type;
   const iswidgetEnable =
     props.isSignYourself ||
     ((props.isSelfSign || props.isNeedSign) &&
       props.data?.signerObjId === props.signerObjId);
-  const widgetData =
-    props.pos?.options?.defaultValue || props.pos?.options?.response;
-  const widgetTypeTranslation = t(`widgets-name.${props?.pos?.type}`);
-  const inputRef = useRef(null);
+  const isReadOnly =
+    props?.data?.Role !== "prefill" &&
+    (props.pos.options?.isReadOnly ||
+      props.data?.signerObjId !== props.signerObjId);
+  // prefer the latest response value over any default value
+  //props?.isPrefillModal is used to handle in create template flow when user use use-template button
+  //then prefill details should not be reflect on pdf document it should only show in modal
+  const widgetData = !props?.isPrefillModal
+    ? (props.pos?.options?.response ?? props.pos?.options?.defaultValue ?? "")
+    : "";
   const [widgetValue, setwidgetValue] = useState();
   const [selectedCheckbox, setSelectedCheckbox] = useState([]);
-  const [hint, setHint] = useState("");
+  const [imgUrl, setImgUrl] = useState("");
+  const [date, setDate] = useState("");
   const fontSize = props.calculateFont(props.pos.options?.fontSize);
   const fontColor = props.pos.options?.fontColor || "black";
   const textWidgetStyle = {
@@ -46,30 +66,22 @@ function PlaceholderType(props) {
     display: "flex",
     height: "100%"
   };
-
   useEffect(() => {
-    if (type !== "date") {
-      if (type && type === "checkbox") {
-        setSelectedCheckbox(
-          props?.pos?.options?.response ||
-            props?.pos?.options?.defaultValue ||
-            []
-        );
-      } else {
-        if (widgetData) {
+    if (!props?.isPrefillModal) {
+      if (type !== "date") {
+        if (type && type === "checkbox") {
+          setSelectedCheckbox(response || defaultData || []);
+        }
+        else {
+          // keep displayed value in sync with the stored response
           setwidgetValue(widgetData);
         }
       }
-      if (props.pos?.options?.hint) {
-        setHint(props.pos?.options.hint);
-      } else if (props.pos?.options?.validation?.type) {
-        checkRegularExpress(props.pos?.options?.validation?.type, setHint);
-      } else {
-        setHint(props.pos?.type);
-      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.pos]);
+  }, [props.pos, widgetData, type]);
+
+
   const ExampleCustomInput = forwardRef(({ value, onClick }, ref) => (
     <div
       style={{
@@ -77,7 +89,7 @@ function PlaceholderType(props) {
         color: fontColor,
         fontFamily: "Arial, sans-serif"
       }}
-      className={`${selectWidgetCls} overflow-hidden`}
+      className={`${isReadOnly ? `select-none opacity-25` : ``} ${selectWidgetCls} overflow-hidden`}
       onClick={onClick}
       ref={ref}
     >
@@ -87,25 +99,124 @@ function PlaceholderType(props) {
   ));
   ExampleCustomInput.displayName = "ExampleCustomInput";
 
-  const handleRadioCheck = (data) => {
-    const defaultData = props.pos.options?.defaultValue;
-    if (widgetValue === data) {
-      return true;
-    } else if (defaultData === data) {
-      return true;
-    } else {
-      return false;
-    }
+  // Extract string label from a radio/checkbox value entry which may be
+  // either a plain string or an object like { name: string, checked: boolean }
+  const getRadioLabel = (data) => {
+    if (typeof data === "string") return data;
+    if (data && typeof data === "object" && data.name != null)
+      return String(data.name);
+    return "";
   };
 
+  const handleRadioCheck = (data) => {
+    if (!props?.isPrefillModal) {
+      const defaultData = widgetValue
+        ? widgetValue?.trim()
+        : props.pos?.options?.defaultValue
+          ? props.pos?.options?.defaultValue?.trim()
+          : "";
+      return defaultData === data?.trim();
+    }
+  };
+  //function is used to get prefill image's signedUrl after expired
+  useEffect(() => {
+    const loadImage = async () => {
+      const isBase64Url = isBase64(props?.pos?.SignUrl);
+      if (
+        props.pos.SignUrl &&
+        props.pos.type === "image" &&
+        props?.data?.Role === "prefill" &&
+        !isBase64Url
+      ) {
+        const getPrefillImg = prefillImg?.find((x) => x.id === props.pos.key);
+        if (getPrefillImg) {
+          setImgUrl(getPrefillImg?.base64);
+        }
+      } else {
+        setImgUrl(props.pos.SignUrl);
+      }
+    };
+    if (!props?.isPrefillModal) {
+      loadImage();
+    }
+  }, [props.pos.SignUrl]);
+
+  const formatWidgetName = () => {
+    const widgetName = props?.pos?.options?.name;
+    const name = widgetName ? widgetName?.split(`-`) : ["-", "-", "-"];
+    const lastWord = name.length > 1 ? `-${name[name.length - 1]}` : "";
+    const title =
+      props?.pos?.type === name[0] ? `${name[0]}${lastWord}` : widgetName;
+    return defaultData || props?.pos?.options?.hint || title;
+  };
+  //useEffect is used to increase auto height of text/textInput widget when user using multiline option and enter value in next line
+  useEffect(() => {
+    if (!textRef.current) return;
+    if (
+      (type === "text" || type === textInputWidget) &&
+      textRef.current &&
+      widgetValue
+    ) {
+      const el = textRef.current;
+      // Count actual number of lines
+      const lines = widgetValue?.split("\n")?.length || props.pos?.Height;
+      // Get line height from computed style
+      const lineHeight = parseInt(window.getComputedStyle(el).lineHeight);
+
+      const textWidgetHeight = lines * lineHeight;
+      // Set widget box height (your logic)
+      onChangeInput(
+        null,
+        props.pos,
+        props?.xyPosition,
+        props.index,
+        props?.setXyPosition,
+        props.data && props.data.Id,
+        null,
+        null,
+        null,
+        null,
+        null,
+        textWidgetHeight
+      );
+    }
+  }, [widgetValue]);
+
+  useEffect(() => {
+    if (props?.startDate) {
+      const format =
+        props?.selectDate?.format ||
+        props.pos?.options?.validation?.format ||
+        "MM/dd/yyyy";
+      const momentFormat = changeDateToMomentFormat(format);
+      const updatedDate = moment(props?.startDate).format(momentFormat);
+      setDate(updatedDate);
+    } else {
+      setDate("");
+    }
+  }, [props?.startDate, props?.selectDate?.format]);
+
   switch (type) {
-    case "signature":
+    case "signature": {
+      const sigRotation = props.pos.options?.rotation;
+      const sigIsSwapped = [90, 270].includes(sigRotation);
+      const sigImgStyle = sigRotation
+        ? sigIsSwapped &&
+          props.pos.signatureType === "type" &&
+          props.pos.Width &&
+          props.pos.Height
+          ? {
+              transform: `rotate(${sigRotation}deg) scaleX(${props.pos.Width / props.pos.Height}) scaleY(${props.pos.Height / props.pos.Width})`
+            }
+          : { transform: `rotate(${sigRotation}deg)` }
+        : undefined;
       return props.pos.SignUrl ? (
         <img
           alt="signature"
           draggable="false"
           src={props.pos.SignUrl}
-          className="w-full h-full select-none-cls "
+          style={sigImgStyle}
+          className={`${props.pos.signatureType !== "type" ? "object-contain" : ""} w-full h-full select-none-cls`}
         />
       ) : (
         <div className={widgetCls}>
@@ -114,22 +225,26 @@ function PlaceholderType(props) {
               style={{
                 fontSize: props.pos
                   ? props.calculateFontsize(props.pos)
-                  : "11px"
+                  : "11px",
+                ...(sigRotation
+                  ? { transform: `rotate(${sigRotation}deg)` }
+                  : {})
               }}
-              className="font-medium"
+              className={`${sigIsSwapped ? "whitespace-nowrap" : ""} font-medium`}
             >
-              {hint || widgetTypeTranslation}
+              {formatWidgetName()}
             </div>
           )}
         </div>
       );
+    }
     case "stamp":
       return props.pos.SignUrl ? (
         <img
           alt="stamp"
           draggable="false"
           src={props.pos.SignUrl}
-          className="w-full h-full select-none-cls"
+          className="w-full h-full select-none-cls object-contain"
         />
       ) : (
         <div className={widgetCls}>
@@ -142,98 +257,162 @@ function PlaceholderType(props) {
               }}
               className="font-medium"
             >
-              {hint || widgetTypeTranslation}
+              {formatWidgetName()}
             </div>
           )}
         </div>
       );
     case "checkbox":
+      const checkBoxLayout = props.pos.options?.layout || "vertical";
+      const isMultipleCheckbox =
+        props.pos.options?.values?.length > 0 ? true : false;
+      const checkboxSize = parseFloat(fontSize);
+      // Scaled gaps
+      const checkboxGapX = `${checkboxSize * 0.8}px`; // was gap-x-2 (fixed 8px)
+      const checkboxGapY = `${checkboxSize * 0.4}px`; // was gap-y-[3px] (fixed 3px)
+
+      const checkBoxWrapperClass = `flex items-start whitespace-pre-wrap ${
+        checkBoxLayout === "horizontal"
+          ? `flex-row flex-wrap lg:py-[1.6px]`
+          : `flex-col`
+      }`;
+
       return (
-        <div style={{ zIndex: props.isSignYourself && "99" }}>
-          {props.pos.options?.values?.map((data, ind) => {
-            return (
-              <div key={ind} className="select-none-cls pointer-events-none">
-                <label
-                  htmlFor={`checkbox-${props.pos.key + ind}`}
-                  style={{ fontSize: fontSize, color: fontColor }}
-                  className={`mb-0 flex items-center gap-1 ${
-                    ind > 0 ? "mt-[3px]" : "mt-[0px]"
-                  }`}
-                >
-                  <input
-                    id={`checkbox-${props.pos.key + ind}`}
-                    style={{
-                      width: fontSize,
-                      height: fontSize
-                    }}
-                    className="op-checkbox rounded-[1px]"
-                    disabled={
-                      props.isNeedSign &&
-                      (props.pos.options?.isReadOnly ||
-                        props.data?.signerObjId !== props.signerObjId)
-                    }
-                    type="checkbox"
-                    readOnly
-                    checked={!!selectCheckbox(ind, selectedCheckbox)}
-                  />
-                  {!props.pos.options?.isHideLabel && (
-                    <span className="leading-none">{data}</span>
-                  )}
-                </label>
-              </div>
-            );
-          })}
+        <div
+          className={checkBoxWrapperClass}
+          style={{
+            zIndex: props.isSignYourself && "99",
+            width: "100%",
+            height: "100%",
+            overflow: "hidden",
+            //Scaled gap with same condition as before
+            gap: isMultipleCheckbox
+              ? checkBoxLayout === "horizontal"
+                ? checkboxGapX // was gap-x-2
+                : checkboxGapY // was gap-y-[3px]
+              : undefined
+          }}
+        >
+          {props.pos.options?.values?.map((data, ind) => (
+            <div key={ind} className="select-none-cls pointer-events-none">
+              <label
+                htmlFor={`checkbox-${props.pos.key + ind}`}
+                style={{
+                  fontSize: fontSize,
+                  color: fontColor,
+                  gap: `${checkboxSize * 0.2}px` //scaled inner gap (was gap-1)
+                }}
+                className="mb-0 flex items-center" //removed gap-1 (fixed 4px)
+              >
+                <input
+                  id={`checkbox-${props.pos.key + ind}`}
+                  style={{
+                    width: fontSize,
+                    height: fontSize,
+                    flexShrink: 0 //prevent flex compression
+                  }}
+                  className="op-checkbox rounded-[1px]"
+                  disabled={props.isNeedSign && isReadOnly}
+                  type="checkbox"
+                  readOnly
+                  checked={
+                    !props?.isPrefillModal
+                      ? !!selectCheckbox(ind, selectedCheckbox)
+                      : false
+                  }
+                />
+                {!props.pos.options?.isHideLabel && (
+                  <span className="leading-none">{data}</span>
+                )}
+              </label>
+            </div>
+          ))}
         </div>
       );
     case textInputWidget:
       return props.isSignYourself || iswidgetEnable ? (
         <textarea
-          ref={inputRef}
-          placeholder={hint || t("widgets-name.text")}
-          rows={1}
-          value={widgetValue}
-          className={`${
-            props.pos.options?.isReadOnly ||
-            props.data?.signerObjId !== props.signerObjId
-              ? "select-none"
-              : textWidgetCls
-          }`}
+          placeholder={formatWidgetName()}
+          ref={textRef}
+          rows={50}
+          value={
+                widgetValue
+          }
+          className={`w-full resize-none overflow-hidden text-base-content item-center outline-none ${isReadOnly ? "select-none" : ""}`}
           style={{
             fontSize: fontSize,
             color: fontColor,
-            background: props.data?.blockColor,
+            background: isReadOnly ? props.data?.blockColor : "white",
             pointerEvents: "none"
           }}
+          name="text"
           readOnly
-          disabled={
-            props.isNeedSign &&
-            (props.pos.options?.isReadOnly ||
-              props.data?.signerObjId !== props.signerObjId)
-          }
+          disabled={props.isNeedSign && isReadOnly}
           cols="50"
         />
       ) : (
         <div style={textWidgetStyle} className="select-none-cls">
-          <span>{hint || widgetTypeTranslation}</span>
+          <span className="ml-0.5">{formatWidgetName()}</span>
         </div>
       );
+    case cellsWidget: {
+      const count = props.pos.options?.cellCount || 5;
+      const cells = (widgetValue || "").split("");
+      const height = "100%";
+      const fontSize = props.calculateFont(props.pos.options?.fontSize);
+      const fontColor = props.pos.options?.fontColor || "black";
+      const handleCellResize = (newCount) => {
+        if (props.setCellCount) props.setCellCount(props.pos.key, newCount);
+      };
+      const isEditable =
+        props.isPlaceholder || props.isSignYourself || props.isSelfSign;
+      return (
+        <CellsWidget
+          isEnabled={iswidgetEnable}
+          count={count}
+          height={height}
+          value={
+                cells.join("")
+          }
+          editable={isEditable}
+          resizable={props?.isAllowModify}
+          fontSize={fontSize}
+          fontColor={fontColor}
+          hint={formatWidgetName()}
+          onCellCountChange={handleCellResize}
+        />
+      );
+    }
     case "dropdown":
       return (
         <div
           style={textWidgetStyle}
           className="select-none-cls flex justify-between items-center"
         >
-          {widgetData || hint || widgetTypeTranslation}
+          {widgetData?.trim() || t("choose-one")}
           <i className="fa-light fa-circle-chevron-down mr-1 "></i>
         </div>
       );
-    case "initials":
+    case "initials": {
+      const iniRotation = props.pos.options?.rotation;
+      const iniIsSwapped = [90, 270].includes(iniRotation);
+      const iniImgStyle = iniRotation
+        ? iniIsSwapped &&
+          props.pos.signatureType === "type" &&
+          props.pos.Width &&
+          props.pos.Height
+          ? {
+              transform: `rotate(${iniRotation}deg) scaleX(${props.pos.Width / props.pos.Height}) scaleY(${props.pos.Height / props.pos.Width})`
+            }
+          : { transform: `rotate(${iniRotation}deg)` }
+        : undefined;
       return props.pos.SignUrl ? (
         <img
           alt="initials"
           draggable="false"
           src={props.pos.SignUrl}
-          className="w-full h-full select-none-cls"
+          style={iniImgStyle}
+          className={`${props.pos.signatureType !== "type" ? "object-contain" : ""} w-full h-full select-none-cls`}
         />
       ) : (
         <div className={widgetCls}>
@@ -242,144 +421,128 @@ function PlaceholderType(props) {
               style={{
                 fontSize: props.pos
                   ? props.calculateFontsize(props.pos)
-                  : "11px"
+                  : "11px",
+                ...(iniRotation
+                  ? { transform: `rotate(${iniRotation}deg)` }
+                  : {}),
+                ...(iniIsSwapped ? { whiteSpace: "nowrap" } : {})
               }}
               className="font-medium text-center"
             >
-              {hint || widgetTypeTranslation}
+              {formatWidgetName()}
             </div>
           )}
         </div>
       );
+    }
     case "name":
       return iswidgetEnable ? (
         <textarea
           readOnly
-          ref={inputRef}
-          placeholder={hint || widgetTypeTranslation}
+          placeholder={formatWidgetName()}
           rows={1}
-          value={widgetValue}
-          className={textWidgetCls}
+          value={
+                widgetValue
+          }
+          className={`${textWidgetCls} ${isReadOnly ? "select-none" : ""}`}
           style={{
             fontSize: fontSize,
             color: fontColor,
+            background: isReadOnly ? props.data?.blockColor : "white",
             pointerEvents: "none"
           }}
           cols="50"
+          disabled={props.isNeedSign && isReadOnly}
         />
       ) : (
         <div className="flex h-full select-none-cls" style={textWidgetStyle}>
-          <span> {props.pos?.options?.hint || widgetTypeTranslation}</span>
+          <span className="ml-0.5">{formatWidgetName()}</span>
         </div>
       );
     case "company":
       return iswidgetEnable ? (
         <textarea
           readOnly
-          ref={inputRef}
-          placeholder={hint || widgetTypeTranslation}
+          placeholder={formatWidgetName()}
           rows={1}
-          value={widgetValue}
-          className={textWidgetCls}
+          value={
+                widgetValue
+          }
+          className={`${textWidgetCls} ${isReadOnly ? "select-none" : ""}`}
           style={{
             fontSize: fontSize,
             color: fontColor,
+            background: isReadOnly ? props.data?.blockColor : "white",
             pointerEvents: "none"
           }}
           cols="50"
+          disabled={props.isNeedSign && isReadOnly}
         />
       ) : (
         <div style={textWidgetStyle} className="select-none-cls">
-          <span>{hint || widgetTypeTranslation}</span>
+          <span className="ml-0.5">{formatWidgetName()}</span>
         </div>
       );
     case "job title":
       return iswidgetEnable ? (
         <textarea
           readOnly
-          ref={inputRef}
-          placeholder={hint || widgetTypeTranslation}
+          placeholder={formatWidgetName()}
           rows={1}
-          value={widgetValue}
-          className={textWidgetCls}
+          value={
+                widgetValue
+          }
+          className={`${textWidgetCls} ${isReadOnly ? "select-none" : ""}`}
           style={{
             fontSize: fontSize,
             color: fontColor,
+            background: isReadOnly ? props.data?.blockColor : "white",
             pointerEvents: "none"
           }}
           cols="50"
+          disabled={props.isNeedSign && isReadOnly}
         />
       ) : (
         <div style={textWidgetStyle} className="select-none-cls">
-          <span>{hint || widgetTypeTranslation}</span>
+          <span className="ml-0.5">{formatWidgetName()}</span>
         </div>
       );
     case "date":
-      return iswidgetEnable ? (
-        <DatePicker
-          renderCustomHeader={({ date, changeYear, changeMonth }) => (
-            <div className="flex justify-start ml-2 ">
-              <select
-                className="bg-transparent outline-none"
-                value={months[getMonth(date)]}
-                onChange={({ target: { value } }) =>
-                  changeMonth(months.indexOf(value))
-                }
-              >
-                {months.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="bg-transparent outline-none"
-                value={getYear(date)}
-                onChange={({ target: { value } }) => changeYear(value)}
-              >
-                {years.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-          disabled={true}
-          closeOnScroll={true}
-          className={`${selectWidgetCls} outline-[#007bff]`}
-          selected={props?.startDate}
-          popperPlacement="top-end"
-          customInput={<ExampleCustomInput />}
-          dateFormat={
-            props.selectDate
-              ? props.selectDate?.format
-              : props.pos?.options?.validation?.format
-                ? props.pos?.options?.validation?.format
-                : "MM/dd/yyyy"
-          }
-        />
+      return iswidgetEnable || props?.data?.Role === "prefill" ? (
+        <div className={`${selectWidgetCls} outline-[#007bff]`}>
+          <span
+            style={{ fontSize: fontSize, color: fontColor }}
+            className={`${isReadOnly ? `select-none opacity-25` : ``} ${selectWidgetCls} overflow-hidden`}
+          >
+            {date}
+            <i className="fa-light fa-calendar text-[10px] ml-[5px]"></i>
+          </span>
+        </div>
       ) : (
         <div
           style={textWidgetStyle}
           className="select-none-cls overflow-hidden"
         >
           <span>
-            {props.selectDate
-              ? props.selectDate?.format
-              : props.pos?.options?.validation?.format
-                ? props.pos?.options?.validation?.format
-                : "MM/dd/yyyy"}
+            {(defaultData !== "today" && defaultData) ||
+              (response !== "today" && response) ||
+              props?.selectDate?.format ||
+              props.pos?.options?.validation?.format ||
+              "MM/dd/yyyy"}
           </span>
         </div>
       );
     case "image":
-      return props.pos.SignUrl ? (
+      return prefillImgLoad[props.pos?.key] ? (
+        <div className="absolute w-full h-full inset-0 flex justify-center items-center bg-white/30 z-50">
+          <Loader />
+        </div>
+      ) : imgUrl ? (
         <img
           alt="image"
           draggable="false"
-          src={props.pos.SignUrl}
-          className="w-full h-full select-none-cls"
+          src={imgUrl}
+          className="w-full h-full select-none-cls object-contain"
         />
       ) : (
         <div className={widgetCls}>
@@ -392,7 +555,7 @@ function PlaceholderType(props) {
               }}
               className="font-medium text-center"
             >
-              {hint || widgetTypeTranslation}
+              {formatWidgetName()}
             </div>
           )}
         </div>
@@ -401,83 +564,139 @@ function PlaceholderType(props) {
       return iswidgetEnable ? (
         <textarea
           readOnly
-          ref={inputRef}
-          placeholder={hint || widgetTypeTranslation}
+          placeholder={formatWidgetName()}
           rows={1}
-          value={widgetValue}
-          className={textWidgetCls}
+          value={
+                widgetValue
+          }
+          className={`${textWidgetCls} ${isReadOnly ? "select-none" : ""}`}
           style={{
             fontSize: fontSize,
             color: fontColor,
-            fontFamily: "Arial, sans-serif",
+            background: isReadOnly ? props.data?.blockColor : "white",
             pointerEvents: "none"
           }}
-          disabled
           cols="1"
+          disabled={props.isNeedSign && isReadOnly}
         />
       ) : (
         <div style={textWidgetStyle} className="select-none-cls">
-          <span>{hint || widgetTypeTranslation}</span>
+          <span className="ml-0.5">{formatWidgetName()}</span>
         </div>
       );
     case radioButtonWidget:
+      const radioLayout = props.pos.options?.layout || "vertical";
+      const isOnlyOneBtn = props.pos.options?.values?.length > 0 ? true : false;
+      const radioSize = parseFloat(fontSize);
+      //Scaled gaps based on radioSize
+      const scaledGapX = `${radioSize * 0.8}px`; // horizontal gap between items
+      const scaledGapY = `${radioSize * 0.4}px`; // vertical gap between items
+
+      const radioWrapperClass = `flex items-start whitespace-pre-wrap ${
+        radioLayout === "horizontal"
+          ? `flex-row flex-wrap lg:py-[1.6px]`
+          : `flex-col`
+      }`;
+
       return (
-        <div>
-          {props.pos.options?.values.map((data, ind) => {
-            return (
-              <div key={ind} className="select-none-cls pointer-events-none">
-                <label
-                  htmlFor={`radio-${props.pos.key + ind}`}
+        <div
+          className={radioWrapperClass}
+          style={{
+            width: "100%",
+            height: "100%",
+            overflow: "hidden",
+            //Scaled gap with condition same as before
+            gap: isOnlyOneBtn
+              ? radioLayout === "horizontal"
+                ? scaledGapX // was gap-x-[10px]
+                : scaledGapY // was gap-y-[5px]
+              : undefined
+          }}
+        >
+          {props.pos.options?.values.map((data, ind) => (
+            <div key={ind} className="select-none-cls pointer-events-none">
+              <label
+                htmlFor={`radio-${props.pos.key + ind}`}
+                style={{
+                  fontSize: fontSize,
+                  color: fontColor,
+                  gap: `${radioSize * 0.2}px` //scaled inner gap (was gap-1)
+                }}
+                className="mb-0 flex items-center" //removed text-xs
+              >
+                <input
+                  readOnly
+                  id={`radio-${props.pos.key + ind}`}
                   style={{
-                    fontSize: fontSize,
-                    color: fontColor,
-                    marginTop: ind > 0 ? "5px" : "0px"
+                    width: fontSize,
+                    height: fontSize,
+                    flexShrink: 0
                   }}
-                  className="text-xs mb-0 flex items-center gap-1 "
-                >
-                  <input
-                    readOnly
-                    id={`radio-${props.pos.key + ind}`}
-                    style={{
-                      width: fontSize,
-                      height: fontSize,
-                      lineHeight: 2
-                    }}
-                    className={`op-radio rounded-full border- border-black appearance-none bg-white inline-block align-middle relative ${
-                      handleRadioCheck(data) ? "checked-radio" : ""
-                    }`}
-                    type="radio"
-                    disabled={
-                      props.isNeedSign &&
-                      (props.pos.options?.isReadOnly ||
-                        props.data?.signerObjId !== props.signerObjId)
-                    }
-                    checked={handleRadioCheck(data)}
-                  />
-                  {!props.pos.options?.isHideLabel && (
-                    <span className="leading-none">{data}</span>
-                  )}
-                </label>
-              </div>
-            );
-          })}
+                  className={`op-radio rounded-full border-black appearance-none bg-white inline-block align-middle relative ${
+                    handleRadioCheck(data) ? "checked-radio" : ""
+                  }`}
+                  type="radio"
+                  disabled={props.isNeedSign && isReadOnly}
+                  checked={handleRadioCheck(data)}
+                />
+                {!props.pos.options?.isHideLabel && (
+                  <span className="leading-none">
+                    {getRadioLabel(data).trim()}
+                  </span>
+                )}
+              </label>
+            </div>
+          ))}
         </div>
       );
     case textWidget:
       return (
         <textarea
+          name="text"
+          ref={textRef}
           readOnly
           placeholder={t("widgets-name.text")}
-          rows={1}
-          value={widgetValue}
-          className={textWidgetCls}
+          rows={50}
+          cols={50}
+          defaultValue={
+                widgetValue
+          }
           style={{
             fontFamily: "Arial, sans-serif",
             fontSize: fontSize,
-            color: fontColor
+            color: fontColor,
+            background: "white"
           }}
-          cols="50"
+          className="w-full resize-none overflow-hidden text-base-content item-center outline-none"
         />
+      );
+    case drawWidget:
+      return prefillImgLoad[props.pos?.key] ? (
+        <div className="absolute w-full h-full inset-0 flex justify-center items-center bg-white/30 z-50">
+          <Loader />
+        </div>
+      ) : widgetValue ? (
+        <img
+          alt="signature"
+          draggable="false"
+          src={widgetValue}
+          className={`${props.pos.signatureType !== "type" ? "object-contain" : ""} w-full h-full select-none-cls`}
+        />
+      ) : (
+        <div className={widgetCls}>
+          {props.pos.type && (
+            <div
+              style={{
+                fontSize: props.pos
+                  ? props.calculateFontsize(props.pos)
+                  : "11px"
+              }}
+              className="font-medium"
+            >
+              {formatWidgetName()}
+            </div>
+          )}
+        </div>
       );
     default:
       return props.pos.SignUrl ? (
@@ -501,7 +720,7 @@ function PlaceholderType(props) {
               }}
               className="font-medium"
             >
-              {hint || widgetTypeTranslation}
+              {formatWidgetName()}
             </div>
           )}
         </div>

@@ -3,8 +3,16 @@ import { useTranslation } from "react-i18next";
 import { Document, Page } from "react-pdf";
 import { useSelector } from "react-redux";
 import { PDFDocument } from "pdf-lib";
-import { base64ToArrayBuffer } from "../../constant/Utils";
+import {
+  base64ToArrayBuffer,
+  decryptPdf,
+  getFileAsArrayBuffer
+} from "../../constant/Utils";
 import { maxFileSize } from "../../constant/const";
+import {
+  clearAcroFields,
+  isPdfPasswordProtected
+} from "../../utils/acroFieldExtractor";
 
 function RenderAllPdfPage(props) {
   const { t } = useTranslation();
@@ -12,7 +20,7 @@ function RenderAllPdfPage(props) {
   const mergePdfInputRef = useRef(null);
   const [signPageNumber, setSignPageNumber] = useState([]);
   const [bookmarkColor, setBookmarkColor] = useState("");
-  const isHeader = useSelector((state) => state.showHeader);
+  const isSidebar = useSelector((state) => state.sidebar.isOpen);
   const [pageWidth, setPageWidth] = useState("");
 
   //set all number of pages after load pdf
@@ -43,10 +51,10 @@ function RenderAllPdfPage(props) {
     };
 
     // Use setTimeout to wait for the transition to complete
-    const timer = setTimeout(updateSize, 100); // match the transition duration
+    const timer = setTimeout(updateSize, 150); // match the transition duration
 
     return () => clearTimeout(timer);
-  }, [isHeader, pageContainer, props?.containerWH]);
+  }, [isSidebar, pageContainer, props?.containerWH]);
   //'function `addSignatureBookmark` is used to display the page where the user's signature is located.
   const addSignatureBookmark = (index) => {
     const ispageNumber = signPageNumber.includes(index + 1);
@@ -73,21 +81,66 @@ function RenderAllPdfPage(props) {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) {
-      alert("Please upload a valid PDF file.");
+      alert(t("please-select-pdf"));
       return;
     }
     if (!file.type.includes("pdf")) {
-      alert("Only PDF files are allowed.");
+      alert(t("only-pdf-allowed"));
       return;
     }
-    const mb = Math.round(file?.size / Math.pow(1024, 2));
-    if (mb > maxFileSize) {
-      alert(`${t("file-alert-1")} ${maxFileSize} MB`);
+    const fileSize =
+      maxFileSize;
+    const pdfsize = file?.size;
+    const fileSizeBytes = fileSize * 1024 * 1024;
+    if (pdfsize > fileSizeBytes) {
+      alert(`${t("file-alert-1")} ${fileSize} MB`);
       removeFile(e);
       return;
     }
     try {
-      const uploadedPdfBytes = await file.arrayBuffer();
+      let uploadedPdfBytes = await getFileAsArrayBuffer(file);
+      await isPdfPasswordProtected(uploadedPdfBytes);
+      try {
+        uploadedPdfBytes = await clearAcroFields(uploadedPdfBytes); // best effort cleanup to prevent stale data
+      } catch (error) {
+        console.error("Error merging PDF:", error);
+        if (error?.message?.includes("is encrypted")) {
+          try {
+            const pdfFile = await decryptPdf(file, "");
+            const pdfArrayBuffer = await getFileAsArrayBuffer(pdfFile);
+            uploadedPdfBytes = await clearAcroFields(pdfArrayBuffer);
+          } catch (err) {
+            if (err?.response?.status === 401) {
+              const password = prompt(
+                `PDF "${file.name}" is password-protected. Enter password:`
+              );
+              if (password) {
+                try {
+                  const pdfFile = await decryptPdf(file, password);
+                  const pdfArrayBuffer = await getFileAsArrayBuffer(pdfFile);
+                  uploadedPdfBytes = await clearAcroFields(pdfArrayBuffer);
+                  // Upload the file to Parse Server
+                } catch (err) {
+                  console.error("Incorrect password or decryption failed", err);
+                  alert(t("incorrect-password-or-decryption-failed"));
+                  return;
+                }
+              } else {
+                alert(t("provide-password"));
+                return;
+              }
+            } else {
+              console.error("Decryption error ", error);
+              alert(t("error-uploading-pdf"));
+              return;
+            }
+          }
+        } else {
+          console.error("File upload error ", error);
+          alert(t("error-uploading-pdf"));
+          return;
+        }
+      }
       const uploadedPdfDoc = await PDFDocument.load(uploadedPdfBytes, {
         ignoreEncryption: true
       });
@@ -104,6 +157,13 @@ function RenderAllPdfPage(props) {
         useObjectStreams: false
       });
       const pdfBuffer = base64ToArrayBuffer(pdfBase64);
+      const pdfsize = pdfBuffer?.byteLength;
+      const fileSizeBytes = fileSize * 1024 * 1024;
+      if (pdfsize > fileSizeBytes) {
+        alert(`${t("file-alert-1")} ${fileSize} MB`);
+        removeFile(e);
+        return;
+      }
       props.setPdfArrayBuffer(pdfBuffer);
       props.setPdfBase64Url(pdfBase64);
       props.setIsUploadPdf && props.setIsUploadPdf(true);
@@ -169,8 +229,8 @@ function RenderAllPdfPage(props) {
               onChange={handleFileUpload}
             />
             <i className="fa-light fa-plus text-gray-500"></i>
-            <span className="text-xs lg:text-sm text-base-content ">
-              Add pages
+            <span className="text-xs lg:text-sm text-base-content">
+              {t("add-pages")}
             </span>
           </button>
         )}

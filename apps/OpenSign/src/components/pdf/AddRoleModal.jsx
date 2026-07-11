@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import ModalUi from "../../primitives/ModalUi";
 import { useTranslation } from "react-i18next";
 
@@ -10,7 +10,7 @@ const AddRoleModal = (props) => {
       isOpen={props.isModalRole}
       handleClose={props.handleCloseRoleModal}
     >
-      <div className="h-full py-[10px] px-[20px]">
+      <div className="text-base-content h-full py-[10px] px-[20px]">
         <form className="flex flex-col" onSubmit={props.handleAddRole}>
           <input
             value={props.roleName}
@@ -33,7 +33,7 @@ const AddRoleModal = (props) => {
             <button
               onClick={props.handleCloseRoleModal}
               type="button"
-              className="op-btn op-btn-ghost ml-2"
+              className="op-btn op-btn-ghost text-base-content ml-2"
             >
               {t("close")}
             </button>

@@ -1,10 +1,11 @@
 import axios from 'axios';
-import { cloudServerUrl } from '../../Utils.js';
+import { cloudServerUrl, serverAppId } from '../../Utils.js';
 const serverUrl = cloudServerUrl; //process.env.SERVER_URL;
-const APPID = process.env.APP_ID;
+const APPID = serverAppId;
 const masterKEY = process.env.MASTER_KEY;
 
 async function saveUser(userDetails) {
+  const normalizedEmail = normalizeEmail(userDetails.email.toLowerCase().replace(/\s/g, ''));
   const userQuery = new Parse.Query(Parse.User);
   userQuery.equalTo('username', userDetails.email);
   const userRes = await userQuery.first({ useMasterKey: true });
@@ -31,6 +32,8 @@ async function saveUser(userDetails) {
     user.set('username', userDetails.email);
     user.set('password', userDetails.password);
     user.set('email', userDetails?.email?.toLowerCase()?.replace(/\s/g, ''));
+    user.set('normalizedEmail', normalizedEmail);
+
     if (userDetails?.phone) {
       user.set('phone', userDetails.phone);
     }
@@ -43,9 +46,9 @@ async function saveUser(userDetails) {
 }
 export default async function usersignup(request) {
   const userDetails = request.params.userDetails;
-  const user = await saveUser(userDetails);
 
   try {
+    const user = await saveUser(userDetails);
     const extClass = userDetails.role.split('_')[0];
 
     const extQuery = new Parse.Query(extClass + '_Users');

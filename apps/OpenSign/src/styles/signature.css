@@ -6,18 +6,21 @@
 .react-datepicker__input-container {
   position: initial !important;
 }
-.select-none-cls{
+
+.select-none-cls {
   -webkit-user-select: none;
   /* Disable text selection in WebKit browsers */
   -moz-user-select: none;
   user-select: none;
 }
+
 .widgets {
   -webkit-user-select: none;
   /* Disable text selection in WebKit browsers */
   -moz-user-select: none;
   user-select: none;
 }
+
 .radioButton {
   width: 100%;
   height: 100%;
@@ -28,19 +31,48 @@
   border: 1px solid #007bff;
   border-radius: 50px;
 }
-
+.prefillCanvas {
+  width: 205px;
+  height: 81px;
+}
 .signatureCanvas {
   width: 440px;
   height: 167px;
 }
-.tabWidth{
+
+.tabWidth {
+  border: 1px solid #f3f4f6;
+  background-color: #f3f4f6;
   width: 440px;
+}
+
+.mysignatureCanvas {
+  width: 370px;
+  height: 146px;
+}
+
+.mystampCanvas {
+  width: 370px;
+  height: 146px;
+}
+
+.intialSignature {
+  border: 2px solid #888;
+  background-color: rgb(255, 255, 255);
+  width: 150px;
+  height: 150px;
+}
+
+[data-theme="opensigndark"] .tabWidth {
+  border: 1px solid #1f2937 !important;
+  background-color: #1f2937 !important;
 }
 
 .intialSignatureCanvas {
   width: 150px;
   height: 150px;
 }
+
 .checked-radio::after {
   content: "";
   position: absolute;
@@ -49,19 +81,48 @@
   width: 50%;
   height: 50%;
   border-radius: 9999px;
-  background-color: #111111; /* blue-500 */
+  background-color: #111111;
+  /* blue-500 */
 }
 
-
-.intialSignature {
-  border: 2px solid #888;
-  background-color: rgb(255, 255, 255);
-  width: 183px;
-  height: 183px;
+/* Dark mode support for initials box in /managesign */
+[data-theme="opensigndark"] .intialSignature {
+  background-color: #1f2937 !important;
+  border-color: #4b5563 !important;
 }
 
-.penContainerDefault {
-  width: 460px;
+[data-theme="opensigndark"] .intialSignatureCanvas {
+  background-color: #1f2937 !important;
+  border-color: #4b5563 !important;
+}
+
+/* Also support signature canvas for consistency */
+[data-theme="opensigndark"] .signatureCanvas {
+  background-color: #1f2937 !important;
+  border-color: #4b5563 !important;
+}
+
+/* Dark mode support for initials box in /managesign */
+[data-theme="opensigndark"] .intialSignature {
+  background-color: #1f2937 !important;
+  border-color: #4b5563 !important;
+}
+
+[data-theme="opensigndark"] .intialSignatureCanvas {
+  background-color: #1f2937 !important;
+  border-color: #4b5563 !important;
+}
+
+/* Also support signature canvas for consistency */
+[data-theme="opensigndark"] .signatureCanvas {
+  background-color: #1f2937 !important;
+  border-color: #4b5563 !important;
+}
+
+/* Also support signature canvas for consistency */
+[data-theme="opensigndark"] .mysignatureCanvas {
+  background-color: #1f2937 !important;
+  border-color: #4b5563 !important;
 }
 
 .icon {
@@ -69,12 +130,14 @@
   font-size: 14px;
   cursor: pointer;
   z-index: 2;
-  background: white;
+  filter: drop-shadow(1px 1px white) drop-shadow(1px -1px white)
+    drop-shadow(1px 0px  white) drop-shadow(-1px 1px white)
 }
 
 .ScrollbarsCustom-TrackY {
   width: 4px !important;
 }
+
 .ScrollbarsCustom-TrackX {
   height: 4px !important;
 }
@@ -103,6 +166,7 @@
   overflow: hidden !important;
   text-overflow: ellipsis;
 }
+
 .disabled {
   opacity: 0.5;
   /* Example: reduce opacity to visually indicate disabled state */
@@ -401,11 +465,18 @@ option {
     width: 300px;
     height: 120px;
   }
-  .tabWidth{
+
+  .mysignatureCanvas {
     width: 300px;
+    height: 118px;
   }
 
-  .penContainerDefault {
+  .mystampCanvas {
+    width: 300px;
+    height: 118px;
+  }
+
+  .tabWidth {
     width: 300px;
   }
 
@@ -422,22 +493,28 @@ option {
 .scroll-hide::-webkit-scrollbar {
   display: none;
 }
+
 @media screen and (max-width: 350px) and (min-width: 311px) {
   .signatureCanvas {
     width: 280px;
     height: 112px;
   }
-  .tabWidth{
+
+  .mysignatureCanvas {
     width: 280px;
+    height: 111px;
+  }
+  .mystampCanvas {
+    width: 280px;
+    height: 111px;
   }
 
-  .penContainerDefault {
+  .tabWidth {
     width: 280px;
   }
 
   .signTab {
     font-weight: 500 !important;
-
     font-size: 10px !important;
   }
 
@@ -451,11 +528,17 @@ option {
     width: 230px;
     height: 92px;
   }
-  .tabWidth{
+
+  .mysignatureCanvas {
     width: 230px;
+    height: 91px;
+  }
+  .mystampCanvas {
+    width: 230px;
+    height: 91px;
   }
 
-  .penContainerDefault {
+  .tabWidth {
     width: 230px;
   }
 

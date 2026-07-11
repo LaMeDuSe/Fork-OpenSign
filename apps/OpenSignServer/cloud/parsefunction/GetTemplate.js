@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { cloudServerUrl } from '../../Utils.js';
+import { cloudServerUrl, serverAppId } from '../../Utils.js';
 
 export default async function GetTemplate(request) {
   const serverUrl = cloudServerUrl; //process.env.SERVER_URL;
@@ -10,7 +10,7 @@ export default async function GetTemplate(request) {
     if (sessiontoken) {
       const userRes = await axios.get(serverUrl + '/users/me', {
         headers: {
-          'X-Parse-Application-Id': process.env.APP_ID,
+          'X-Parse-Application-Id': serverAppId,
           'X-Parse-Session-Token': sessiontoken,
         },
       });
@@ -26,6 +26,8 @@ export default async function GetTemplate(request) {
         template.include('CreatedBy');
         template.include('ExtUserPtr.TenantId');
         template.include('Bcc');
+        template.include('Cc');
+
         const extUserQuery = new Parse.Query('contracts_Users');
         extUserQuery.equalTo('Email', userEmail);
         extUserQuery.include('TeamIds');
@@ -62,6 +64,7 @@ export default async function GetTemplate(request) {
             template.include('ExtUserPtr.TenantId');
             template.include('Placeholders.signerPtr');
             template.include('Bcc');
+            template.include('Cc');
           }
         }
         const res = await template.first({ useMasterKey: true });

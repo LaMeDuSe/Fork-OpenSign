@@ -1,6 +1,6 @@
 import axios from 'axios';
-import { cloudServerUrl } from '../../Utils.js';
-const appId = process.env.APP_ID;
+import { cloudServerUrl, serverAppId } from '../../Utils.js';
+const appId = serverAppId;
 const masterkey = process.env.MASTER_KEY;
 export default async function createBatchContact(req) {
   if (!req?.user) {
@@ -20,8 +20,10 @@ export default async function createBatchContact(req) {
             UserRole: 'contracts_Guest',
             TenantId: { __type: 'Pointer', className: 'partners_Tenant', objectId: x.TenantId },
             CreatedBy: { __type: 'Pointer', className: '_User', objectId: req.user.id },
-            Name: x.Name,
+            Name: x.Name?.trim(),
             Email: x.Email?.toLowerCase()?.replace(/\s/g, ''),
+            Company: x?.Company?.trim(),
+            JobTitle: x?.JobTitle?.trim(),
             IsDeleted: false,
             IsImported: true,
             ...(x?.Phone ? { Phone: `${x?.Phone}` } : {}),

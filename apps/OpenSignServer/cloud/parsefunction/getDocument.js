@@ -1,8 +1,9 @@
 import axios from 'axios';
-import { cloudServerUrl } from '../../Utils.js';
+import { cloudServerUrl, serverAppId } from '../../Utils.js';
 export default async function getDocument(request) {
   const serverUrl = cloudServerUrl; //process.env.SERVER_URL;
   const docId = request.params.docId;
+  const include = request?.params?.include || '';
   const sessiontoken = request?.headers?.sessiontoken || '';
   try {
     if (docId) {
@@ -17,6 +18,9 @@ export default async function getDocument(request) {
         query.include('Placeholders');
         query.include('DeclineBy');
         query.notEqualTo('IsArchive', true);
+        if (include) {
+          query?.include(include);
+        }
         const res = await query.first({ useMasterKey: true });
         if (res) {
           const IsEnableOTP = res?.get('IsEnableOTP') || false;
@@ -30,7 +34,7 @@ export default async function getDocument(request) {
               try {
                 const userRes = await axios.get(serverUrl + '/users/me', {
                   headers: {
-                    'X-Parse-Application-Id': process.env.APP_ID,
+                    'X-Parse-Application-Id': serverAppId,
                     'X-Parse-Session-Token': sessiontoken,
                   },
                 });

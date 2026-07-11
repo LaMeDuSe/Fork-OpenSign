@@ -2,30 +2,35 @@ import React, { useRef, useState } from "react";
 import PrevNext from "./PrevNext";
 import {
   base64ToArrayBuffer,
+  decryptPdf,
   deletePdfPage,
+  flattenPdf,
+  getFileAsArrayBuffer,
   handleDownloadCertificate,
   handleDownloadPdf,
   handleRemoveWidgets,
-  handleToPrint
+  handleToPrint,
+  reorderPdfPages
 } from "../../constant/Utils";
 import "../../styles/signature.css";
 import { DropdownMenu } from "radix-ui";
 import ModalUi from "../../primitives/ModalUi";
 import Loader from "../../primitives/Loader";
+import PageReorderModal from "./PageReorderModal";
 import { useTranslation } from "react-i18next";
 import { PDFDocument } from "pdf-lib";
 import { maxFileSize } from "../../constant/const";
 
 function Header(props) {
   const { t } = useTranslation();
-  const filterPrefill =
-    props?.signerPos &&
-    props?.signerPos?.filter((data) => data.Role !== "prefill");
   const isMobile = window.innerWidth < 767;
   const [isDownloading, setIsDownloading] = useState("");
   const [isDeletePage, setIsDeletePage] = useState(false);
+  const [isReorderModal, setIsReorderModal] = useState(false);
   const mergePdfInputRef = useRef(null);
   const enabledBackBtn = props?.disabledBackBtn === true ? false : true;
+  const isViewerSigner = false;
+  const finishLabel = t("finish");
   //function for show decline alert
   const handleDeclinePdfAlert = async () => {
     if (props?.handleDecline) {
@@ -65,22 +70,59 @@ function Header(props) {
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) {
-      alert("Please upload a valid PDF file.");
+      alert(t("please-select-pdf"));
       return;
     }
     if (!file.type.includes("pdf")) {
-      alert("Only PDF files are allowed.");
+      alert(t("only-pdf-allowed"));
       return;
     }
-
-    const mb = Math.round(file?.size / Math.pow(1024, 2));
-    if (mb > maxFileSize) {
-      alert(`${t("file-alert-1")} ${maxFileSize} MB`);
+    const fileSize =
+      maxFileSize;
+    const pdfsize = file?.size;
+    const fileSizeBytes = fileSize * 1024 * 1024;
+    if (pdfsize > fileSizeBytes) {
+      alert(`${t("file-alert-1")} ${fileSize} MB`);
       removeFile(e);
       return;
     }
     try {
-      const uploadedPdfBytes = await file.arrayBuffer();
+      let uploadedPdfBytes = await file.arrayBuffer();
+      try {
+        uploadedPdfBytes = await flattenPdf(uploadedPdfBytes);
+      } catch (err) {
+        if (err?.message?.includes("is encrypted")) {
+          try {
+            const pdfFile = await decryptPdf(file, "");
+            const pdfArrayBuffer = await getFileAsArrayBuffer(pdfFile);
+            uploadedPdfBytes = await flattenPdf(pdfArrayBuffer);
+          } catch (err) {
+            if (err?.response?.status === 401) {
+              const password = prompt(
+                `PDF "${file.name}" is password-protected. Enter password:`
+              );
+              if (password) {
+                try {
+                  const pdfFile = await decryptPdf(file, password);
+                  const pdfArrayBuffer = await getFileAsArrayBuffer(pdfFile);
+                  uploadedPdfBytes = await flattenPdf(pdfArrayBuffer);
+                  // Upload the file to Parse Server
+                } catch (err) {
+                  console.error("Incorrect password or decryption failed", err);
+                  alert(t("incorrect-password-or-decryption-failed"));
+                }
+              } else {
+                alert(t("provide-password"));
+              }
+            } else {
+              console.log("Err ", err);
+              alert(t("error-uploading-pdf"));
+            }
+          }
+        } else {
+          alert(t("error-uploading-pdf"));
+        }
+      }
       const uploadedPdfDoc = await PDFDocument.load(uploadedPdfBytes, {
         ignoreEncryption: true
       });
@@ -97,6 +139,13 @@ function Header(props) {
         useObjectStreams: false
       });
       const pdfBuffer = base64ToArrayBuffer(pdfBase64);
+      const pdfsize = pdfBuffer?.byteLength;
+      const fileSizeBytes = fileSize * 1024 * 1024;
+      if (pdfsize > fileSizeBytes) {
+        alert(`${t("file-alert-1")} ${fileSize} MB`);
+        removeFile(e);
+        return;
+      }
       props.setPdfArrayBuffer(pdfBuffer);
       props.setPdfBase64Url(pdfBase64);
       props.setIsUploadPdf && props.setIsUploadPdf(true);
@@ -106,12 +155,44 @@ function Header(props) {
       console.error("Error merging PDF:", error);
     }
   };
+
+  const handleReorderSave = async (order) => {
+    try {
+      const pdfupdatedData = await reorderPdfPages(props.pdfArrayBuffer, order);
+      if (pdfupdatedData) {
+        props.setPdfArrayBuffer(pdfupdatedData.arrayBuffer);
+        props.setPdfBase64Url(pdfupdatedData.base64);
+        props.setAllPages(pdfupdatedData.totalPages);
+        props.setPageNumber(1);
+      }
+    } catch (e) {
+      console.log("error in reorder pdf pages", e);
+    }
+    setIsReorderModal(false);
+  };
+
+  const handleDownloadDoc = async () => {
+    await handleDownloadPdf(
+      props?.pdfDetails,
+      setIsDownloading,
+      props.pdfBase64
+    );
+  };
+  const handleDownloadBtn = async () => {
+    if (
+      props?.isCompleted
+    ) {
+      props?.setIsDownloadModal(true);
+    } else {
+      await handleDownloadDoc();
+    }
+  };
   return (
     <div className="flex py-[5px]">
       {isMobile && props?.isShowHeader ? (
         <div
           id="navbar"
-          className="stickyHead"
+          className="stickyHead touch-none"
           style={{
             width: window.innerWidth + "px"
           }}
@@ -145,17 +226,7 @@ function Header(props) {
                   >
                     <DropdownMenu.Item
                       className="DropdownMenuItem"
-                      onClick={() => {
-                        if (props?.isCompleted) {
-                          props?.setIsDownloadModal(true);
-                        } else {
-                          handleDownloadPdf(
-                            props?.pdfDetails,
-                            setIsDownloading,
-                            props.pdfBase64
-                          );
-                        }
-                      }}
+                      onClick={() => handleDownloadBtn()}
                     >
                       <div className="flex flex-row">
                         <i
@@ -165,25 +236,27 @@ function Header(props) {
                         {t("download")}
                       </div>
                     </DropdownMenu.Item>
-                    {props?.isCompleted && (
-                      <DropdownMenu.Item
-                        className="DropdownMenuItem"
-                        onClick={() =>
-                          handleDownloadCertificate(
-                            props?.pdfDetails,
-                            setIsDownloading
-                          )
-                        }
-                      >
-                        <div className="border-none bg-[#fff]">
-                          <i
-                            className="fa-light fa-award mr-[3px]"
-                            aria-hidden="true"
-                          ></i>
-                          {t("certificate")}
-                        </div>
-                      </DropdownMenu.Item>
-                    )}
+                    {
+                        props?.isCompleted && (
+                          <DropdownMenu.Item
+                            className="DropdownMenuItem"
+                            onClick={() =>
+                              handleDownloadCertificate(
+                                props?.pdfDetails,
+                                setIsDownloading
+                              )
+                            }
+                          >
+                            <div className="border-none bg-[#fff]">
+                              <i
+                                className="fa-light fa-award mr-[3px]"
+                                aria-hidden="true"
+                              ></i>
+                              {t("certificate")}
+                            </div>
+                          </DropdownMenu.Item>
+                        )
+                    }
                     {props?.isSignYourself && (
                       <DropdownMenu.Item
                         className="DropdownMenuItem"
@@ -222,7 +295,7 @@ function Header(props) {
                 */}
                 {props?.currentSigner && (
                   <div className="flex items-center" data-tut="reactourFifth">
-                    {props?.decline && (
+                    {props?.decline && !isViewerSigner && (
                       <div
                         onClick={() => handleDeclinePdfAlert()}
                         className="text-[red] border-none font-[650] text-[14px] mr-2"
@@ -234,7 +307,7 @@ function Header(props) {
                       <div
                         onClick={() => {
                           if (!props?.isMailSend) {
-                            props?.alertSendEmail();
+                            props?.handleSaveDoc();
                           }
                         }}
                         className={`${
@@ -247,13 +320,15 @@ function Header(props) {
                           : t("send")}
                       </div>
                     ) : (
-                      <div
-                        data-tut="reactourThird"
-                        onClick={() => props?.embedWidgetsData()}
-                        className="border-none font-[650] text-[14px] op-link op-link-primary no-underline"
-                      >
-                        {t("finish")}
-                      </div>
+                      !isViewerSigner && (
+                        <div
+                          data-tut="reactourThird"
+                          onClick={() => props?.embedWidgetsData()}
+                          className="border-none font-[650] text-[14px] op-link op-link-primary no-underline"
+                        >
+                          {finishLabel}
+                        </div>
+                      )
                     )}
                     <input
                       type="file"
@@ -292,13 +367,7 @@ function Header(props) {
                           )}
                           <DropdownMenu.Item
                             className="DropdownMenuItem"
-                            onClick={() =>
-                              handleDownloadPdf(
-                                props?.pdfDetails,
-                                setIsDownloading,
-                                props.pdfBase64
-                              )
-                            }
+                            onClick={() => handleDownloadDoc()}
                           >
                             <div className="flex flex-row">
                               <i
@@ -331,6 +400,17 @@ function Header(props) {
                                   <i className="fa-light fa-trash text-gray-500 2xl:text-[30px] mr-[3px]"></i>
                                   <span className="font-[500]">
                                     {t("delete-page")}
+                                  </span>
+                                </div>
+                              </DropdownMenu.Item>
+                              <DropdownMenu.Item
+                                className="DropdownMenuItem"
+                                onClick={() => setIsReorderModal(true)}
+                              >
+                                <div className="flex flex-row">
+                                  <i className="fa-light fa-list-ol text-gray-500 2xl:text-[30px] mr-[3px]"></i>
+                                  <span className="font-[500]">
+                                    {t("reorder-pages")}
                                   </span>
                                 </div>
                               </DropdownMenu.Item>
@@ -407,42 +487,21 @@ function Header(props) {
           />
           {props?.isPlaceholder ? (
             <>
-              <div className="flex mx-[100px] lg:mx-0 order-last lg:order-none">
-                {!props?.isMailSend &&
-                  props?.signersdata.length > 0 &&
-                  props?.signersdata.length !== filterPrefill.length && (
-                    <div>
-                      {filterPrefill.length === 0 ? (
-                        <span className="text-[13px] text-[#f5405e]">
-                          {t("add")}{" "}
-                          {props?.signersdata.length - filterPrefill.length}{" "}
-                          {t("recipients")} {t("widgets-name.signature")}
-                        </span>
-                      ) : (
-                        <span className="text-[13px] text-[#f5405e]">
-                          {t("add")}{" "}
-                          {props?.signersdata.length - filterPrefill.length}{" "}
-                          {t("more")}
-                          {t("recipients")} {t("widgets-name.signature")}
-                        </span>
-                      )}
-                    </div>
-                  )}
-              </div>
+              <div className="flex mx-[100px] lg:mx-0 order-last lg:order-none"></div>
               <div className="flex">
                 {props?.setIsEditTemplate && (
                   <button
                     onClick={() => props?.setIsEditTemplate(true)}
                     className="outline-none border-none text-center mr-[3px]"
                   >
-                    <i className="fa-light fa-gear fa-lg"></i>
+                    <i className="fa-light fa-gear fa-lg text-base-content"></i>
                   </button>
                 )}
                 {enabledBackBtn && (
                   <button
                     onClick={() => window.history.go(-2)}
                     type="button"
-                    className="op-btn op-btn-ghost op-btn-sm mr-[3px]"
+                    className="op-btn op-btn-ghost text-base-content op-btn-sm mr-[3px]"
                   >
                     {t("back")}
                   </button>
@@ -451,7 +510,7 @@ function Header(props) {
                   disabled={props?.isMailSend && true}
                   data-tut="headerArea"
                   className="op-btn op-btn-primary op-btn-sm mr-[3px]"
-                  onClick={() => props?.alertSendEmail()}
+                  onClick={() => props?.handleSaveDoc()}
                 >
                   {props?.completeBtnTitle
                     ? props?.completeBtnTitle
@@ -477,38 +536,32 @@ function Header(props) {
                   ></i>
                   <span className="hidden lg:block">{t("print")}</span>
                 </button>
-                {props?.isCompleted && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleDownloadCertificate(
-                        props?.pdfDetails,
-                        setIsDownloading
-                      )
-                    }
-                    className="op-btn op-btn-secondary op-btn-sm mr-[3px] shadow"
-                  >
-                    <i
-                      className="fa-light fa-award py-[3px]"
-                      aria-hidden="true"
-                    ></i>
-                    <span className="hidden lg:block">{t("certificate")}</span>
-                  </button>
-                )}
+                {
+                    props?.isCompleted && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleDownloadCertificate(
+                            props?.pdfDetails,
+                            setIsDownloading
+                          )
+                        }
+                        className="op-btn op-btn-secondary op-btn-sm mr-[3px] shadow"
+                      >
+                        <i
+                          className="fa-light fa-award py-[3px]"
+                          aria-hidden="true"
+                        ></i>
+                        <span className="hidden lg:block">
+                          {t("certificate")}
+                        </span>
+                      </button>
+                    )
+                }
                 <button
                   type="button"
                   className="op-btn op-btn-primary op-btn-sm mr-[3px] shadow"
-                  onClick={() => {
-                    if (props?.isCompleted) {
-                      props?.setIsDownloadModal(true);
-                    } else {
-                      handleDownloadPdf(
-                        props?.pdfDetails,
-                        setIsDownloading,
-                        props.pdfBase64
-                      );
-                    }
-                  }}
+                  onClick={() => handleDownloadBtn()}
                 >
                   <i
                     className="fa-light fa-download py-[3px]"
@@ -523,20 +576,14 @@ function Header(props) {
                   <>
                     {props?.templateId && (
                       <button
-                        onClick={() =>
-                          handleDownloadPdf(
-                            props?.pdfDetails,
-                            setIsDownloading,
-                            props.pdfBase64
-                          )
-                        }
+                        onClick={() => handleDownloadDoc()}
                         type="button"
-                        className="op-btn op-btn-ghost op-btn-sm mr-[3px]"
+                        className="op-btn op-btn-ghost text-base-content op-btn-sm mr-[3px]"
                       >
                         <span className="hidden lg:block">{t("download")}</span>
                       </button>
                     )}
-                    {!props?.isSelfSign && (
+                    {!props?.isSelfSign && !isViewerSigner && (
                       <button
                         className="op-btn op-btn-secondary op-btn-sm mr-[3px] shadow"
                         onClick={() => handleDeclinePdfAlert()}
@@ -547,49 +594,47 @@ function Header(props) {
                     {!props?.templateId && (
                       <button
                         type="button"
-                        className="op-btn op-btn-ghost op-btn-sm mr-[3px]"
-                        onClick={() =>
-                          handleDownloadPdf(
-                            props?.pdfDetails,
-                            setIsDownloading,
-                            props.pdfBase64
-                          )
-                        }
+                        className="op-btn op-btn-ghost text-base-content op-btn-sm mr-[3px]"
+                        onClick={() => handleDownloadDoc()}
                       >
                         <i className="fa-light fa-arrow-down font-semibold lg:hidden"></i>
                         <span className="hidden lg:block">{t("download")}</span>
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="op-btn op-btn-primary op-btn-sm mr-[3px] shadow"
-                      onClick={() => props?.embedWidgetsData()}
-                    >
-                      {t("finish")}
-                    </button>
+                    {!isViewerSigner && (
+                      <button
+                        type="button"
+                        className="op-btn op-btn-primary op-btn-sm mr-[3px] shadow"
+                        onClick={() => props?.embedWidgetsData()}
+                      >
+                        {finishLabel}
+                      </button>
+                    )}
                   </>
                 )}
               </div>
             )
           ) : props?.isCompleted ? (
             <div className="flex flex-row">
-              {props?.isCompleted && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleDownloadCertificate(
-                      props?.pdfDetails,
-                      setIsDownloading
-                    )
-                  }
-                  className="op-btn op-btn-secondary op-btn-sm gap-0 font-medium text-[12px] mr-[3px] shadow"
-                >
-                  <i className="fa-light fa-award" aria-hidden="true"></i>
-                  <span className="hidden lg:block ml-1">
-                    {t("certificate")}
-                  </span>
-                </button>
-              )}
+              {
+                  props?.isCompleted && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleDownloadCertificate(
+                          props?.pdfDetails,
+                          setIsDownloading
+                        )
+                      }
+                      className="op-btn op-btn-secondary op-btn-sm gap-0 font-medium text-[12px] mr-[3px] shadow"
+                    >
+                      <i className="fa-light fa-award" aria-hidden="true"></i>
+                      <span className="hidden lg:block ml-1">
+                        {t("certificate")}
+                      </span>
+                    </button>
+                  )
+              }
               <button
                 onClick={(e) =>
                   handleToPrint(e, setIsDownloading, props?.pdfDetails)
@@ -603,7 +648,8 @@ function Header(props) {
               <button
                 type="button"
                 className="op-btn op-btn-primary op-btn-sm gap-0 font-medium text-[12px] mr-[3px] shadow"
-                onClick={() => props?.setIsDownloadModal(true)}
+                // onClick={() => props?.setIsDownloadModal(true)}
+                onClick={() => handleDownloadBtn()}
               >
                 <i className="fa-light fa-download" aria-hidden="true"></i>
                 <span className="hidden lg:block ml-1">{t("download")}</span>
@@ -632,7 +678,7 @@ function Header(props) {
               <button
                 onClick={() => window.history.go(-2)}
                 type="button"
-                className="op-btn op-btn-ghost op-btn-sm mr-[3px]"
+                className="op-btn op-btn-ghost text-base-content op-btn-sm mr-[3px]"
               >
                 {t("back")}
               </button>
@@ -641,7 +687,7 @@ function Header(props) {
                 className="op-btn op-btn-primary op-btn-sm mr-[3px]"
                 onClick={() => props?.embedWidgetsData()}
               >
-                {t("finish")}
+                {finishLabel}
               </button>
             </div>
           )}
@@ -677,8 +723,8 @@ function Header(props) {
         handleClose={() => setIsDeletePage(false)}
       >
         <div className="h-[100%] p-[20px]">
-          <p className="font-medium">{t("delete-alert-2")}</p>
-          <p className="pt-3">{t("delete-note")}</p>
+          <p className="font-medium text-base-content">{t("delete-alert-2")}</p>
+          <p className="pt-3 text-base-content">{t("delete-note")}</p>
           <div className="h-[1px] bg-[#9f9f9f] w-full my-[15px]"></div>
           <button
             onClick={() => handleDetelePage()}
@@ -690,12 +736,18 @@ function Header(props) {
           <button
             onClick={() => setIsDeletePage(false)}
             type="button"
-            className="op-btn op-btn-ghost"
+            className="op-btn op-btn-ghost text-base-content"
           >
             {t("no")}
           </button>
         </div>
       </ModalUi>
+      <PageReorderModal
+        isOpen={isReorderModal}
+        handleClose={() => setIsReorderModal(false)}
+        totalPages={props.allPages}
+        onSave={handleReorderSave}
+      />
     </div>
   );
 }

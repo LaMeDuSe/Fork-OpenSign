@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { cloudServerUrl } from '../../Utils.js';
+import { cloudServerUrl, serverAppId } from '../../Utils.js';
 export default async function getDrive(request) {
   const serverUrl = cloudServerUrl; //process.env.SERVER_URL;
-  const appId = process.env.APP_ID;
+  const appId = serverAppId;
   const limit = request.params.limit;
   const skip = request.params.skip;
   const docId = request.params.docId;
@@ -36,6 +36,8 @@ export default async function getDrive(request) {
         query.skip(skip);
         query.limit(limit);
         query.exclude('AuditTrail');
+        query.exclude('OriginalDocument');
+        query.exclude('SignedDocument');
         const res = await query.find({ useMasterKey: true });
         return res;
       } catch (err) {
@@ -46,7 +48,7 @@ export default async function getDrive(request) {
       return { error: 'Please provide required parameter!' };
     }
   } catch (err) {
-    console.log('err', err);
+    console.log('err', err?.response?.data || err);
     if (err.code == 209) {
       return { error: 'Invalid session token' };
     } else {

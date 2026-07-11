@@ -13,7 +13,8 @@ const SelectSigners = (props) => {
     setSignersData,
     uniqueId,
     isRemove,
-    handleAddUser
+    handleAddUser,
+    isSubscribe
   } = props;
   const [userList, setUserList] = useState([]);
   const [selected, setSelected] = useState();
@@ -59,7 +60,11 @@ const SelectSigners = (props) => {
   };
   const handleAdd = () => {
     if (userData && userData.objectId) {
-      handleAddUser(userData);
+      const addedId = handleAddUser(userData);
+      if (props.closePopup) {
+        props.closePopup();
+      }
+    } else if (selected?.value) {
       if (props.closePopup) {
         props.closePopup();
       }
@@ -97,7 +102,7 @@ const SelectSigners = (props) => {
       const contactRes = axiosRes?.data?.result || [];
       if (contactRes) {
         const res = JSON.parse(JSON.stringify(contactRes));
-        //compareArrays is a function where compare between two array (total signersList and dcument signers list)
+        //compareArrays is a function where compare between two array (total signersList and document signers list)
         //and filter signers from total signer's list which already present in document's signers list
         // const compareArrays = (res, signerObj) => {
         //   return res.filter(
