@@ -35,7 +35,7 @@ export default async function forwardDoc(request) {
       try {
         let mailRes;
         for (let i = 0; i < recipients.length; i++) {
-          const logo = `<img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' style='padding:20px'/>`;
+          const logo = `<img src='https://assets.lameduse.net/logo/lameduse_group_logo_grad_text_primary_bg_none.svg' height='50' style='padding:20px'/>`;
 
           const themeColor = '#47a3ad';
 

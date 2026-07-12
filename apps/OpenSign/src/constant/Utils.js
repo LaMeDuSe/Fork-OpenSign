@@ -2836,7 +2836,7 @@ export const getAppLogo = async () => {
       const resolvedFavicon =
         tenant?.favicon || tenant?.logo || appInfo.fev_Icon;
       localStorage.setItem("appname", "OpenSign™");
-      localStorage.setItem("favicon", appInfo.fev_Icon);
+      localStorage.setItem("favicon", resolvedFavicon);
       return {
         logo: tenant?.logo,
         favicon: resolvedFavicon,
@@ -4222,7 +4222,7 @@ function _removeWidgetAnnotations(pdfDoc) {
 
 export const mailTemplate = (param) => {
   const appName = "OpenSign™";
-  const logo = `<div style='padding:10px'><img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' /></div>`;
+  const logo = `<div style='padding:10px'><img src='https://assets.lameduse.net/logo/lameduse_group_logo_grad_text_primary_bg_none.svg' height='50' /></div>`;
 
   const subject = `${param.senderName} has requested you to sign "${param.title}"`;
   const body =

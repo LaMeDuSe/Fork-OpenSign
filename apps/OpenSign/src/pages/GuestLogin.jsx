@@ -8,7 +8,6 @@ import {
   contractUsers,
   saveLanguageInLocal
 } from "../constant/Utils";
-import logo from "../assets/images/logo.png";
 import { appInfo } from "../constant/appinfo";
 import Parse from "parse";
 import { useTranslation } from "react-i18next";
@@ -76,7 +75,7 @@ function GuestLogin() {
 
   //function generate serverUrl and parseAppId from url and save it in local storage
   const handleServerUrl = async () => {
-      setAppLogo(logo);
+      setAppLogo(appInfo.applogo);
     const favicon = localStorage.getItem("favicon");
 
     localStorage.clear(); // Clears everything

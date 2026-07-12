@@ -16,7 +16,7 @@ const getRequestEmail = (
               props: {
                 width: null,
                 height: 50,
-                url: "https://qikinnovation.ams3.digitaloceanspaces.com/logo.png",
+                url: "https://assets.lameduse.net/logo/lameduse_group_logo_grad_text_primary_bg_none.svg",
                 alt: "logo",
                 linkHref: null,
                 contentAlignment: "middle"

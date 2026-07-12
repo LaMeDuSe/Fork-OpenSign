@@ -74,7 +74,7 @@ export default function Title() {
     <>
       <title>{title}</title>
       <meta name="description" content={title} />
-      {logo && <link rel="icon" type="image/png" href={logo} />}
+      {logo && <link rel="icon" type="image/svg+xml" href={logo} />}
       <link rel="manifest" href={manifestUrl} />
     </>
   );

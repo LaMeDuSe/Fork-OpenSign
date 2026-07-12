@@ -5,7 +5,7 @@ async function sendDeclineMail(doc, publicUrl, userId, reason) {
   try {
     const TenantAppName = appName;
     const logo =
-      "<img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' style='padding:20px'/>";
+      "<img src='https://assets.lameduse.net/logo/lameduse_group_logo_grad_text_primary_bg_none.svg' height='50' style='padding:20px'/>";
 
     const removePrefill =
       doc?.Placeholders?.length > 0 && doc?.Placeholders?.filter(x => x?.Role !== 'prefill');

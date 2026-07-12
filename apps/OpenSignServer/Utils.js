@@ -669,7 +669,7 @@ export const mailTemplate = param => {
   const themeColor = '#47a3ad';
   const subject = `${param.senderName} has requested you to sign "${param.title}"`;
   const AppName = appName;
-  const logo = `<img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' />`;
+  const logo = `<img src='https://assets.lameduse.net/logo/lameduse_group_logo_grad_text_primary_bg_none.svg' height='50' />`;
 
   const body =
     "<html><head><meta http-equiv='Content-Type' content='text/html;charset=UTF-8' /></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background:white;padding-bottom:20px'><div style='padding:10px'>" +
