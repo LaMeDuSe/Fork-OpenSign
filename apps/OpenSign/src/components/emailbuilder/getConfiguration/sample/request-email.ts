@@ -3,7 +3,7 @@ import { TEditorConfiguration } from "../../documents/editor/core";
 const getRequestEmail = (
 ): TEditorConfiguration => {
   const appName =
-    "OpenSign™";
+    "Lameduse™";
 
   const logoBlock =
         {
@@ -52,7 +52,7 @@ const getRequestEmail = (
       data: {
         style: {
           color: "#FFFFFF",
-          backgroundColor: "#47A3AD",
+          backgroundColor: "#1B1464",
           fontSize: 20,
           fontWeight: "bold",
           padding: {

@@ -17,7 +17,7 @@ dotenv.config({ quiet: true });
 
 export const cloudServerUrl = process.env.SERVER_URL || 'http://localhost:8080';
 export const serverAppId = process.env.APP_ID || 'opensign';
-export const appName = 'OpenSign™';
+export const appName = 'Lameduse™';
 export const prefillDraftDocWidget = ['date', 'textbox', 'checkbox', 'radio button', 'image'];
 export const prefillDraftTemWidget = [
   'date',
@@ -666,7 +666,7 @@ export const getSecureUrl = url => {
 };
 
 export const mailTemplate = param => {
-  const themeColor = '#47a3ad';
+  const themeColor = '#1B1464';
   const subject = `${param.senderName} has requested you to sign "${param.title}"`;
   const AppName = appName;
   const logo = `<img src='https://assets.lameduse.net/logo/lameduse_group_logo_grad_text_primary_bg_none.svg' height='50' />`;
