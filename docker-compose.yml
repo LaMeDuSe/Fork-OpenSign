@@ -1,7 +1,11 @@
 services:
   server:
+    build:
+      context: .
+      dockerfile: apps/OpenSignServer/Dockerhubfile
     image: opensign/opensignserver:main
     container_name: OpenSignServer-container
+    entrypoint: ["/bin/sh", "-c", "cp -rn /usr/src/app/files_templates/. /usr/src/app/files/ 2>/dev/null; exec node index.js"]
     volumes:
       - opensign-files:/usr/src/app/files
     ports:
